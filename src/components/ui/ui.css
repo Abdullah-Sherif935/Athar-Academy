@@ -114,7 +114,11 @@
   display: none;
 }
 
-@media (min-width: 1120px) {
+.mobile-drawer .theme-switcher__text {
+  display: inline;
+}
+
+@media (min-width: 1380px) {
   .theme-switcher__text {
     display: inline;
   }

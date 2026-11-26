@@ -12,13 +12,19 @@ export const en = {
     primaryNav: 'Primary navigation',
     themeSelection: 'Theme selection',
     languageSwitch: 'Switch language',
+    breadcrumb: 'Breadcrumb',
+    clearSearch: 'Clear search',
+    showPassword: 'Show password',
+    hidePassword: 'Hide password',
   },
   nav: {
     home: 'Home',
     about: 'About',
     disciplines: 'Disciplines',
-    courses: 'Sample Courses',
-    foundation: 'Design System',
+    courses: 'Courses',
+    instructors: 'Instructors',
+    login: 'Login',
+    register: 'Join Academy',
   },
   theme: {
     light: 'Light',
@@ -29,124 +35,335 @@ export const en = {
     switchLabel: 'العربية',
     currentName: 'English',
   },
-  hero: {
-    badge: 'Foundation Phase · Bilingual Learning Platform',
-    title: 'Learn with clarity, grow with purpose, and make a lasting impact',
-    subtitle:
-      'ATHAR ACADEMY is a multi-disciplinary learning platform connecting learners, instructors, and course communities in a cohesive Arabic and English experience built for focus and scale.',
-    primaryCta: 'Explore Sample Disciplines',
-    secondaryCta: 'Preview UI Foundation',
+  common: {
+    demoBadge: 'Demo Data',
+    sampleDataNote: 'Sample demo content only — live database will be connected in a later phase',
+    viewDetails: 'View Details',
+    viewDiscipline: 'View Discipline',
+    viewProfile: 'View Profile',
+    viewAllDisciplines: 'View All Disciplines',
+    viewAllCourses: 'Explore All Courses',
+    viewAllInstructors: 'View All Instructors',
+    backToHome: 'Back to Home',
+    backToCourses: 'Back to Courses',
+    backToDisciplines: 'Back to Disciplines',
+    sampleCoursesCount: '{count} sample courses',
+    sampleCourseSingular: '1 sample course',
+    lessonsCount: '{count} lessons',
+    minutesShort: '{count}m',
+    freePreview: 'Sample Preview',
+    allDisciplines: 'All Disciplines',
+    allLevels: 'All Levels',
+    resetFilters: 'Reset Filters',
+    levels: {
+      beginner: 'Beginner',
+      intermediate: 'Intermediate',
+      advanced: 'Advanced',
+    },
+    sort: {
+      label: 'Sort by',
+      featured: 'Featured first',
+      titleAsc: 'Title (A–Z)',
+      levelAsc: 'Level (Beginner → Advanced)',
+    },
+    resourceTypes: {
+      pdf: 'PDF Guide',
+      template: 'Template',
+      worksheet: 'Worksheet',
+      guide: 'Reference Guide',
+    },
+  },
+  home: {
+    heroBadge: 'Multi-Disciplinary Learning Platform · Bilingual',
+    heroTitle: 'Learn with clarity, grow with purpose, and make a lasting impact',
+    heroSubtitle:
+      'ATHAR ACADEMY connects learners and instructors across engineering, technology, business, design, media, personal development, and education inside one calm, structured learning environment.',
+    primaryCta: 'Browse Sample Courses',
+    secondaryCta: 'Explore Disciplines',
     pillars: {
-      bilingual: 'Native Arabic (RTL) & English (LTR) support',
-      community: 'Dedicated learning communities per course',
-      guided: 'Clear progress tracking comfortable for long study sessions',
+      multidisciplinary: 'Multi-disciplinary tracks beyond a single field',
+      bilingual: 'Native Arabic (RTL) and English (LTR) experience',
+      community: 'Dedicated course communities guided by instructors',
     },
-  },
-  intro: {
-    eyebrow: 'Platform Vision',
-    title: 'Designed for focused learning across disciplines',
-    description:
-      'ATHAR ACADEMY is not limited to a single field. It provides a structured environment where instructors guide dedicated course communities and learners enjoy a calm, trustworthy experience on any device.',
-    cards: {
-      multidisciplinary: {
-        title: 'Multi-Disciplinary',
-        body: 'A flexible structure supporting technology, business, design, languages, and professional skills.',
-      },
-      instructorLed: {
-        title: 'Instructor-Guided',
-        body: 'Each course is managed by assigned instructors with structured lessons, resources, and a private community.',
-      },
-      accessible: {
-        title: 'Accessible & Calm',
-        body: 'Built toward WCAG 2.2 AA standards with light and dark themes crafted for comfortable study.',
-      },
+    featuredDisciplines: {
+      eyebrow: 'Disciplines',
+      title: 'Diverse fields built for real growth',
+      description: 'Explore structured learning tracks spanning technical, creative, business, and educational domains.',
     },
-  },
-  disciplines: {
-    eyebrow: 'Sample Disciplines',
-    sampleBadge: 'Sample Preview Content',
-    title: 'Learning disciplines in preparation',
-    description:
-      'The categories below are static placeholders illustrating the platform structure. Real categories will load from the database in upcoming phases.',
-    items: {
-      tech: {
-        title: 'Technology & Engineering',
-        description: 'Sample track covering modern software, systems, and data skills.',
-      },
-      business: {
-        title: 'Business & Leadership',
-        description: 'Sample track covering management, strategy, and operations.',
-      },
-      design: {
-        title: 'Design & Creativity',
-        description: 'Sample track covering visual systems, UX, and digital craft.',
-      },
-      languages: {
-        title: 'Languages & Communication',
-        description: 'Sample track covering practical languages and workplace communication.',
+    featuredCourses: {
+      eyebrow: 'Sample Courses',
+      title: 'Explore featured demo courses',
+      description: 'Structured demonstration courses showcasing curriculum depth and clarity before backend integration.',
+    },
+    featuredInstructors: {
+      eyebrow: 'Sample Instructors',
+      title: 'Guided by dedicated instructors',
+      description: 'Each instructor manages assigned courses, resources, and a focused learning community.',
+    },
+    whyChoose: {
+      eyebrow: 'Why Choose ATHAR ACADEMY',
+      title: 'Crafted for deep focus and meaningful outcomes',
+      description: 'We build a calm, credible learning platform that respects learners’ time and empowers instructors.',
+      items: {
+        structured: {
+          title: 'Structured, Goal-Driven Curricula',
+          body: 'Every course is organized into clear modules, practical resources, and explicit learning outcomes.',
+        },
+        approved: {
+          title: 'Curated Enrollment & Guidance',
+          body: 'Manual enrollment approval ensures active, focused course communities with genuine support.',
+        },
+        bilingual: {
+          title: 'Bilingual & Comfortable to Study',
+          body: 'Full Arabic and English support with light and dark themes tuned for long study sessions.',
+        },
+        community: {
+          title: 'Dedicated Course Communities',
+          body: 'Private discussions per course and structured communication between learners and instructors.',
+        },
       },
     },
-  },
-  courses: {
-    eyebrow: 'Sample Cards',
-    sampleBadge: 'Sample Data — Not Live Courses',
-    title: 'Preview of upcoming course cards',
-    description:
-      'These cards are static visual placeholders used to verify brand consistency, RTL/LTR layout, and theming. No fabricated instructors, ratings, or enrollment counts are shown.',
-    statusLabel: 'Sample Preview',
-    progressLabel: 'Sample progress indicator',
-    actionPreview: 'Open Preview Modal',
-    items: {
-      one: {
-        category: 'Sample Track · Technology',
-        title: 'Sample Course: Foundations of Digital Product Building',
-        summary: 'Placeholder summary demonstrating course card hierarchy, spacing, and teal progress tokens.',
-      },
-      two: {
-        category: 'Sample Track · Business',
-        title: 'Sample Course: Analytical Thinking & Project Delivery',
-        summary: 'Placeholder summary validating Inter typography and clear visual contrast across light and dark modes.',
-      },
-      three: {
-        category: 'Sample Track · Design',
-        title: 'Sample Course: Human-Centered Design Principles',
-        summary: 'Placeholder summary verifying responsive card grids and semantic badges across breakpoints.',
+    howItWorks: {
+      eyebrow: 'Learning Journey',
+      title: 'How ATHAR ACADEMY works',
+      description: 'Four clear steps from exploring a discipline to completing a course and making an impact.',
+      steps: {
+        one: {
+          title: '1. Explore Disciplines & Courses',
+          body: 'Browse multiple fields and inspect curriculum outlines, objectives, and instructor profiles.',
+        },
+        two: {
+          title: '2. Request Enrollment',
+          body: 'Submit an enrollment request for the course that matches your goals for administrative review.',
+        },
+        three: {
+          title: '3. Learn & Join the Community',
+          body: 'Once approved, watch structured lessons, download resources, and participate in discussions.',
+        },
+        four: {
+          title: '4. Grow & Make an Impact',
+          body: 'Track your progress step by step and apply new skills in your projects and career.',
+        },
       },
     },
+    benefits: {
+      eyebrow: 'Platform Benefits',
+      title: 'Built thoughtfully for both learners and instructors',
+      learnersTitle: 'For Learners',
+      learnersList: [
+        'Clear tracks for beginners and advanced learners across diverse fields.',
+        'Visual progress tracking and self-paced study without distractions.',
+        'Downloadable resources and a private community for questions and discussion.',
+      ],
+      instructorsTitle: 'For Instructors',
+      instructorsList: [
+        'Focused management of assigned courses, lessons, and resources.',
+        'Direct moderation of course communities and learner announcements.',
+        'Clear visibility into learner progress without administrative clutter.',
+      ],
+    },
+    testimonials: {
+      eyebrow: 'Demo Feedback',
+      title: 'Illustrative learner perspectives',
+      description: 'The quotes below are clearly labeled demo examples for layout preview only—not live reviews.',
+    },
+    faq: {
+      eyebrow: 'FAQ',
+      title: 'Frequently asked questions',
+      description: 'Quick answers about ATHAR ACADEMY’s multidisciplinary vision and current demo phase.',
+    },
+    ctaBanner: {
+      title: 'Ready to explore your next learning path?',
+      description: 'Browse our sample course catalog or preview the academy registration experience.',
+      primary: 'Browse Courses',
+      secondary: 'Join Academy (Demo)',
+    },
   },
-  foundation: {
-    eyebrow: 'Phase 01 Foundation',
-    title: 'Core UI system preview',
+  about: {
+    eyebrow: 'About ATHAR ACADEMY',
+    title: 'We believe structured learning creates lasting, positive impact',
+    lead: 'ATHAR ACADEMY is a multi-disciplinary learning platform uniting learners and instructors in a calm, trustworthy, bilingual digital environment.',
+    visionTitle: 'Our Vision',
+    visionBody:
+      'To build a trusted multi-disciplinary learning ecosystem where clarity, depth, and accessibility empower learners and instructors to grow continuously.',
+    missionTitle: 'Our Mission',
+    missionBody:
+      'To deliver organized curricula, interactive course communities, and thoughtfully designed tools that respect every learner’s focus and every instructor’s craft.',
+    philosophyTitle: 'Educational Philosophy',
+    philosophyBody:
+      'Meaningful learning takes more than isolated videos. It grows through progressive structure, hands-on resources, instructor guidance, and supportive peer communities.',
+    valuesTitle: 'Core Values',
+    values: {
+      clarity: {
+        title: 'Clarity & Focus',
+        body: 'Restrained, distraction-free design that keeps learning front and center.',
+      },
+      impact: {
+        title: 'Lasting Impact',
+        body: 'Practical skills and deep understanding that translate into real-world results.',
+      },
+      inclusivity: {
+        title: 'Bilingual Accessibility',
+        body: 'First-class Arabic and English support engineered toward WCAG 2.2 AA standards.',
+      },
+      integrity: {
+        title: 'Trust & Transparency',
+        body: 'Honest presentation, structured curricula, and responsible community moderation.',
+      },
+    },
+    methodologyTitle: 'Our Learning Methodology',
+    methodologySteps: {
+      structured: {
+        title: 'Progressive Mastery',
+        body: 'Sequential modules that build steadily from core foundations to practical synthesis.',
+      },
+      resources: {
+        title: 'Applied Resources',
+        body: 'Guides, worksheets, and templates reinforcing each lesson.',
+      },
+      community: {
+        title: 'Community & Guidance',
+        body: 'Dedicated course spaces where learners connect with peers and instructors.',
+      },
+    },
+    whyExistsTitle: 'Why ATHAR ACADEMY Exists',
+    whyExistsBody:
+      'ATHAR ACADEMY was envisioned to bridge the gap between noisy, overwhelming course marketplaces and rigid sites lacking community. Our goal is one cohesive educational home built to scale across disciplines and instructors.',
+  },
+  disciplinesPage: {
+    eyebrow: 'Discipline Catalog',
+    title: 'Explore Learning Disciplines',
     description:
-      'Reusable, accessible primitives powered by centralized brand tokens, logical CSS properties, and keyboard-first interactions.',
-    alertInfoTitle: 'Clean Foundation Scope',
-    alertInfoBody:
-      'Authentication, enrollments, and database tables will be introduced in upcoming roadmap phases.',
-    alertSuccessTitle: 'Brand, Theme & Bilingual Engine Active',
-    alertSuccessBody: 'Language and theme preferences persist locally without reloading the page.',
-    emptyTitle: 'No published courses yet',
-    emptyDescription: 'Live database-backed courses will appear here once Phase 03 connects the catalog.',
-    skeletonLabel: 'Sample loading state (Skeleton)',
-    modalTrigger: 'Open Modal Preview',
-    modalTitle: 'Accessible Dialog & Form Primitives',
-    modalDescription:
-      'Verifies Escape-key dismissal, labeled inputs, validation states, and mixed-direction content in both RTL and LTR.',
-    sampleInputLabel: 'Sample email (mixed-direction check)',
-    sampleInputPlaceholder: 'name@example.com',
-    sampleInputHelper: 'Demonstrates isolated LTR values inside bilingual forms.',
-    sampleTextareaLabel: 'Sample note',
-    sampleTextareaPlaceholder: 'Type a short message in Arabic or English...',
-    sampleSubmit: 'Test Validation',
-    sampleCancel: 'Close',
-    sampleValidationError: 'Please enter a valid value to preview the error state.',
-    sampleValidationSuccess: 'Form validation preview succeeded (local UI state only — nothing sent).',
+      'Browse sample disciplines across ATHAR ACADEMY and discover the demo courses and instructors within each field.',
+    searchPlaceholder: 'Search disciplines...',
+    emptyTitle: 'No matching disciplines found',
+    emptyDescription: 'Try a different keyword or clear the search input.',
+  },
+  disciplineDetails: {
+    overviewTitle: 'Discipline Overview',
+    highlightsTitle: 'Key Focus Areas',
+    coursesTitle: 'Sample Courses in This Discipline',
+    instructorsTitle: 'Related Instructors (Demo)',
+    noCoursesTitle: 'No matching courses found',
+    noCoursesDescription: 'Try adjusting the level filter or sort option to see available sample courses.',
+    notFoundTitle: 'Discipline Not Found',
+    notFoundDescription: 'We could not find the requested discipline in the sample catalog.',
+  },
+  coursesPage: {
+    eyebrow: 'Course Catalog',
+    title: 'Browse Sample Courses',
+    description:
+      'Search and filter courses by discipline and level. All items currently shown are local mock data for frontend preview.',
+    searchPlaceholder: 'Search by title, summary, or course code...',
+    disciplineFilter: 'Discipline',
+    levelFilter: 'Level',
+    resultsCount: 'Showing {count} of {total} sample courses',
+    emptyTitle: 'No matching courses found',
+    emptyDescription: 'Try adjusting your search keywords or resetting filters to view all sample courses.',
+    byInstructor: 'Instructor:',
+  },
+  courseDetails: {
+    requestEnrollment: 'Request Enrollment (Demo)',
+    demoNote: 'Demo only: this button previews the enrollment flow without creating database records.',
+    whatYouLearnTitle: 'What You Will Learn',
+    objectivesTitle: 'Learning Objectives',
+    curriculumTitle: 'Curriculum Preview',
+    requirementsTitle: 'Requirements',
+    audienceTitle: 'Target Audience',
+    resourcesTitle: 'Course Resources Preview',
+    instructorsTitle: 'Instructors (Demo)',
+    relatedTitle: 'Related Sample Courses',
+    courseCode: 'Course Code',
+    duration: 'Sample Duration',
+    level: 'Level',
+    discipline: 'Discipline',
+    enrollModalTitle: 'Enrollment Request Preview (Frontend Demo)',
+    enrollModalBody:
+      'In the full ATHAR ACADEMY platform, enrollment requests are reviewed and approved by the administration before unlocking lessons. In Phase 02A (public frontend only), no real request or database record is created.',
+    enrollModalClose: 'Got it, Close',
+    enrollModalRegister: 'Preview Registration Page',
+    notFoundTitle: 'Course Not Found',
+    notFoundDescription: 'We could not find the requested course in the sample catalog.',
+  },
+  instructorsPage: {
+    eyebrow: 'Sample Instructors',
+    title: 'Meet Our Demo Instructors',
+    description:
+      'Demonstration profiles illustrating how instructor biographies, focus areas, and assigned courses appear across disciplines.',
+  },
+  instructorProfile: {
+    eyebrow: 'Instructor Profile (Demo)',
+    bioTitle: 'Biography',
+    expertiseTitle: 'Areas of Expertise',
+    experienceTitle: 'Professional Experience (Sample Data)',
+    coursesTitle: 'Sample Courses Taught',
+    socialTitle: 'Links',
+    websiteLabel: 'Website (Demo Link)',
+    notFoundTitle: 'Instructor Not Found',
+    notFoundDescription: 'We could not find the requested instructor profile.',
+  },
+  auth: {
+    demoBannerTitle: 'Frontend Demo Only',
+    demoBannerBody:
+      'Authentication is not connected yet. No real sign-in occurs and no personal information is saved in Phase 02A.',
+    login: {
+      title: 'Sign in to ATHAR ACADEMY',
+      subtitle: 'Enter your email and password to preview the login interface.',
+      emailLabel: 'Email Address',
+      emailPlaceholder: 'name@example.com',
+      passwordLabel: 'Password',
+      passwordPlaceholder: '••••••••',
+      rememberMe: 'Remember me on this device',
+      forgotPassword: 'Forgot password?',
+      forgotDemoMessage:
+        'Password recovery will connect to Supabase Auth and transactional email in a later phase (frontend demo only).',
+      submitButton: 'Sign In (Demo)',
+      noAccount: "Don't have an account yet?",
+      registerLink: 'Join Academy',
+      successTitle: 'Login preview validated (Demo Only)',
+      successBody:
+        'Client-side validation succeeded. Real authentication via Supabase will be connected in a later phase.',
+    },
+    register: {
+      title: 'Join ATHAR ACADEMY',
+      subtitle: 'Preview the learner registration form with client-side validation.',
+      fullNameLabel: 'Full Name',
+      fullNamePlaceholder: 'Enter your full name',
+      emailLabel: 'Email Address',
+      emailPlaceholder: 'name@example.com',
+      passwordLabel: 'Password',
+      passwordPlaceholder: 'At least 8 characters',
+      confirmPasswordLabel: 'Confirm Password',
+      confirmPasswordPlaceholder: 'Re-enter your password',
+      termsLabel: 'I agree to the Terms of Use and Privacy Policy (UI preview only)',
+      submitButton: 'Create Account (Demo)',
+      hasAccount: 'Already have an account?',
+      loginLink: 'Sign In',
+      successTitle: 'Registration preview validated (Demo Only)',
+      successBody:
+        'No real account was created and no personal data was stored. This is a Phase 02A frontend preview only.',
+    },
+    validation: {
+      nameRequired: 'Please enter your full name (at least 3 characters).',
+      emailInvalid: 'Please enter a valid email address.',
+      passwordShort: 'Password must be at least 8 characters long.',
+      passwordRequired: 'Please enter your password.',
+      passwordMismatch: 'Passwords do not match.',
+      termsRequired: 'Please accept the terms to continue.',
+    },
+  },
+  notFound: {
+    code: '404',
+    title: 'Page Not Found',
+    description: 'The page you are looking for does not exist or may have been moved.',
   },
   footer: {
     description:
       'A multi-disciplinary learning platform dedicated to clear, trustworthy, and impactful education in Arabic and English.',
-    linksTitle: 'Quick Links',
+    exploreTitle: 'Explore',
+    accountTitle: 'Account & Info',
     contactTitle: 'Brand & Contact',
     copyright: '© {year} ATHAR ACADEMY. All rights reserved.',
-    phaseNote: 'Phase 01 · Foundation & Brand System',
+    phaseNote: 'Phase 02A · Public Website (Local Demo Data)',
   },
 } as const;

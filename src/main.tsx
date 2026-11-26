@@ -14,6 +14,9 @@ import './styles/typography.css';
 import './styles/global.css';
 import './components/ui/ui.css';
 import './components/layout/layout.css';
+import './components/layout/public.css';
+import './features/student/styles/student.css';
+import './features/admin/styles/admin.css';
 
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';

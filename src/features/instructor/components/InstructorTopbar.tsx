@@ -1,0 +1,70 @@
+import { Mail, Menu } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useI18n } from '../../../app/providers/I18nProvider';
+import { LanguageSwitcher } from '../../../components/brand/LanguageSwitcher';
+import { ThemeSwitcher } from '../../../components/brand/ThemeSwitcher';
+import { Badge } from '../../../components/ui';
+import { useInstructorDemo } from '../context/InstructorDemoContext';
+
+export function InstructorTopbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
+  const { t, locale } = useI18n();
+  const { profile, conversations } = useInstructorDemo();
+  const unreadMsgs = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
+
+  return (
+    <header className="student-topbar">
+      <div className="student-topbar__left">
+        <button
+          type="button"
+          className="mobile-menu-btn student-mobile-trigger"
+          onClick={onOpenMobileNav}
+          aria-label={t('a11y.openMenu')}
+        >
+          <Menu size={20} aria-hidden="true" />
+        </button>
+        <Badge variant="teal">{t('instructor.portalName')}</Badge>
+      </div>
+
+      <div className="student-topbar__right">
+        <LanguageSwitcher />
+        <ThemeSwitcher />
+        <Link
+          to="/instructor/messages"
+          className="mobile-menu-btn"
+          style={{ position: 'relative', width: 40, height: 40 }}
+          aria-label={t('instructor.nav.messages')}
+        >
+          <Mail size={18} aria-hidden="true" />
+          {unreadMsgs > 0 ? (
+            <span
+              style={{
+                position: 'absolute',
+                insetBlockStart: -4,
+                insetInlineEnd: -4,
+                minWidth: 18,
+                height: 18,
+                paddingInline: 4,
+                borderRadius: '9999px',
+                background: 'var(--brand-blue)',
+                color: 'var(--text-on-brand)',
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {unreadMsgs}
+            </span>
+          ) : null}
+        </Link>
+        <Link to="/instructor/profile" className="student-avatar-pill">
+          <span className="student-avatar-pill__circle" aria-hidden="true">
+            {profile.initials}
+          </span>
+          <span className="student-avatar-pill__name">{profile.fullName[locale]}</span>
+        </Link>
+      </div>
+    </header>
+  );
+}

@@ -23,7 +23,14 @@ html[lang='ar'] h2,
 html[lang='ar'] h3,
 html[lang='ar'] h4 {
   letter-spacing: 0;
-  line-height: 1.35;
+  line-height: 1.48;
+  font-weight: 700;
+  text-wrap: balance;
+}
+
+html[lang='ar'] h2,
+html[lang='ar'] h3 {
+  font-weight: 600;
 }
 
 html[lang='en'] h1,
@@ -31,6 +38,7 @@ html[lang='en'] h2,
 html[lang='en'] h3 {
   letter-spacing: -0.02em;
   line-height: 1.2;
+  text-wrap: balance;
 }
 
 p {
@@ -39,12 +47,18 @@ p {
 }
 
 html[lang='ar'] p {
-  line-height: 1.8;
+  line-height: 1.85;
 }
 
 .text-display {
-  font-size: clamp(2.125rem, 4.2vw, 3.25rem);
+  font-size: clamp(2.125rem, 4vw, 3.125rem);
   font-weight: 800;
+}
+
+html[lang='ar'] .text-display {
+  font-size: clamp(1.85rem, 3.2vw, 2.65rem);
+  font-weight: 700;
+  line-height: 1.48;
 }
 
 .text-h1 {
@@ -52,9 +66,19 @@ html[lang='ar'] p {
   font-weight: 700;
 }
 
+html[lang='ar'] .text-h1 {
+  font-size: clamp(1.55rem, 2.6vw, 2.125rem);
+  font-weight: 700;
+}
+
 .text-h2 {
   font-size: clamp(1.5rem, 2.5vw, 1.875rem);
   font-weight: 700;
+}
+
+html[lang='ar'] .text-h2 {
+  font-size: clamp(1.35rem, 2.2vw, 1.65rem);
+  font-weight: 600;
 }
 
 .text-h3 {
@@ -75,9 +99,9 @@ html[lang='ar'] p {
 }
 
 .tagline-label {
-  font-size: 0.8125rem;
-  font-weight: 700;
-  color: var(--brand-blue);
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--info);
 }
 
 html[lang='en'] .tagline-label {

@@ -1,5 +1,11 @@
+import { adminAr } from './dictionaries/admin.ar';
+import { adminEn } from './dictionaries/admin.en';
 import { ar } from './dictionaries/ar';
 import { en } from './dictionaries/en';
+import { instructorAr } from './dictionaries/instructor.ar';
+import { instructorEn } from './dictionaries/instructor.en';
+import { studentAr } from './dictionaries/student.ar';
+import { studentEn } from './dictionaries/student.en';
 
 export type Locale = 'ar' | 'en';
 export type Direction = 'rtl' | 'ltr';
@@ -7,7 +13,10 @@ export type Direction = 'rtl' | 'ltr';
 export const LOCALE_STORAGE_KEY = 'athar-locale';
 export const DEFAULT_LOCALE: Locale = 'ar';
 
-const dictionaries = { ar, en } as const;
+const dictionaries = {
+  ar: { ...ar, student: studentAr, instructor: instructorAr, admin: adminAr },
+  en: { ...en, student: studentEn, instructor: instructorEn, admin: adminEn },
+} as const;
 
 function resolvePath(obj: unknown, path: string): string | undefined {
   const parts = path.split('.');

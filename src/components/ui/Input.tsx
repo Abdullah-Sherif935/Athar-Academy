@@ -2,7 +2,7 @@ import { AlertCircle } from 'lucide-react';
 import { useId, type InputHTMLAttributes } from 'react';
 
 export interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
-  label: string;
+  label?: string;
   helperText?: string;
   error?: string;
 }
@@ -22,9 +22,11 @@ export function Input({
 
   return (
     <div className="ui-field">
-      <label htmlFor={inputId} className="ui-field__label">
-        {label}
-      </label>
+      {label ? (
+        <label htmlFor={inputId} className="ui-field__label">
+          {label}
+        </label>
+      ) : null}
       <input
         id={inputId}
         aria-invalid={Boolean(error)}
