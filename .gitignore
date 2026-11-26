@@ -36,3 +36,6 @@ Thumbs.db
 # Supabase local state
 supabase/.temp/
 supabase/.branches/
+
+# Vercel local link
+.vercel/

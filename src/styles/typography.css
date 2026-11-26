@@ -1,0 +1,86 @@
+html[lang='en'] {
+  font-family: var(--font-en);
+  line-height: 1.6;
+}
+
+html[lang='ar'] {
+  font-family: var(--font-ar);
+  line-height: 1.75;
+  letter-spacing: 0;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  color: var(--text-primary);
+  margin: 0;
+  font-weight: 700;
+}
+
+html[lang='ar'] h1,
+html[lang='ar'] h2,
+html[lang='ar'] h3,
+html[lang='ar'] h4 {
+  letter-spacing: 0;
+  line-height: 1.35;
+}
+
+html[lang='en'] h1,
+html[lang='en'] h2,
+html[lang='en'] h3 {
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+html[lang='ar'] p {
+  line-height: 1.8;
+}
+
+.text-display {
+  font-size: clamp(2.125rem, 4.2vw, 3.25rem);
+  font-weight: 800;
+}
+
+.text-h1 {
+  font-size: clamp(1.75rem, 3vw, 2.375rem);
+  font-weight: 700;
+}
+
+.text-h2 {
+  font-size: clamp(1.5rem, 2.5vw, 1.875rem);
+  font-weight: 700;
+}
+
+.text-h3 {
+  font-size: clamp(1.1875rem, 1.8vw, 1.375rem);
+  font-weight: 600;
+}
+
+.text-body {
+  font-size: 1rem;
+}
+
+.text-small {
+  font-size: 0.875rem;
+}
+
+.text-caption {
+  font-size: 0.8125rem;
+}
+
+.tagline-label {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--brand-blue);
+}
+
+html[lang='en'] .tagline-label {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}

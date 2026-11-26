@@ -11,20 +11,20 @@
 Per `ATHAR_ACADEMY_SKILL.md` §1, the brand name, logo paths, and brand-specific copy must stay centralized so future brand updates never require rewriting components.
 
 ### Centralized Configuration (`src/config/brand.ts`)
-- Stores `brandName`, bilingual taglines, support email, social links, and semantic logo asset paths:
-  - `logos.horizontalLight`: `/brand/athar-academy-logo.svg`
-  - `logos.horizontalDark`: `/brand/athar-academy-dark.svg`
-  - `logos.stacked`: `/brand/athar-academy-stacked.svg`
-  - `logos.icon`: `/brand/athar-academy-icon.svg`
-  - `logos.appIcon512`: `/brand/athar-academy-icon-512.png`
-- A single `<BrandLogo variant="horizontal" | "stacked" | "icon" surface="auto" | "light" | "dark" />` component automatically selects the correct asset, enforces `object-fit: contain`, preserves aspect ratio, applies clear-space padding, and outputs localized `alt` text (`ATHAR ACADEMY logo` / `شعار أكاديمية أثر`).
+- Stores `brandName`, bilingual taglines, support email, social links, and semantic logo asset paths.
+- Use the two existing approved PNG assets directly from their current project folder via Vite ES module imports (so Vite bundles them reliably into production builds without creating duplicate logo folders or moving/renaming the originals):
+  - `logos.primary`: imported from `logo and prand/Athar Academy_ Learn, Grow, Impact.png`
+  - `logos.icon`: imported from `logo and prand/Athar Academy Icon Logo.png`
+- Until separate dark/stacked variants are supplied, use the existing horizontal PNG on light surfaces and the existing icon PNG where a compact brand mark is needed. Do not invent or simulate unavailable logo variants.
+- A single `<BrandLogo variant="horizontal" | "stacked" | "icon" surface="auto" | "light" | "dark" />` component should select only assets that actually exist, enforce `object-fit: contain`, preserve aspect ratio, apply clear-space padding, and output localized `alt` text (`ATHAR ACADEMY logo` / `شعار أكاديمية أثر`).
+- Keep asset paths centralized so filenames or folders can be changed later in one place.
 
-### Current Brand Asset Gap & Action Plan
-Currently, only two raster PNG files exist in `logo and prand/`:
-- `Athar Academy_ Learn, Grow, Impact.png` (2172 × 724 px — light background horizontal)
-- `Athar Academy Icon Logo.png` (1254 × 1254 px — dark-navy rounded-square app icon)
+### Current Brand Assets & Follow-up
+The project already contains these two raster PNG files in the existing `logo and prand/` folder:
+- `logo and prand/Athar Academy_ Learn, Grow, Impact.png` (2172 × 724 px — horizontal primary logo on a light background)
+- `logo and prand/Athar Academy Icon Logo.png` (1254 × 1254 px — dark-navy rounded-square app icon)
 
-**Action Required:** Obtain the official brand-assets ZIP containing all 5 expected files (`athar-academy-logo.svg`, `athar-academy-stacked.svg`, `athar-academy-dark.svg`, `athar-academy-icon.svg`, `athar-academy-icon-512.png`) and place them in `public/brand/`. Never redraw the logo in CSS or replace it with plain text.
+**Phase 01 Action:** Use these existing files in place. Do not create another logo folder, duplicate the files, or treat the current assets as missing. The five-file SVG/PNG package previously listed is an optional future enhancement for dedicated stacked, dark-surface, and vector variants—not a blocker for starting Phase 01. Never redraw the logo in CSS or replace it with plain text.
 
 ---
 
@@ -52,13 +52,13 @@ All colors come exclusively from CSS custom properties—no raw HEX values scatt
 ## 3. Brand Application Across Every Surface
 
 ### A. Public Website (Landing, Catalog, Instructor Profiles)
-- **Navigation Bar:** Surface white (light) / `#111C2E` (dark) with subtle border, horizontal `<BrandLogo />` (`athar-academy-logo.svg` in light, `athar-academy-dark.svg` in dark), clear links, visible Language Switcher (`العربية` / `EN`), Theme Switcher (Sun/Moon/Monitor), and primary Blue CTA (`Sign In` / `Get Started`).
+- **Navigation Bar:** Surface white (light) / `#111C2E` (dark) with subtle border, `<BrandLogo />` using the existing primary logo (on light surfaces or inside a crisp light pill container on dark surfaces when horizontal legibility is needed) or the existing app icon, clear links, visible Language Switcher (`العربية` / `EN`), Theme Switcher (Sun/Moon/Monitor), and primary Blue CTA.
 - **Hero Section:** Open, calm educational tone with Navy headline (light) / Near-white (dark), brand tagline (`LEARN · GROW · MAKE AN IMPACT` / `تعلّم · تطوّر · اصنع أثرًا`), clean spacing, and zero heavy gradients.
-- **Footer:** Anchored in brand Navy (`#142B4A`) with `athar-academy-dark.svg` horizontal logo, bilingual links, and copyright.
+- **Footer:** Anchored in brand Navy (`#142B4A`). Until a dedicated dark-surface logo variant exists, use the existing icon asset or a verified legible treatment of the existing primary PNG; do not reference a nonexistent `athar-academy-dark.svg`.
 
 ### B. Authentication Pages (Login, Register, Password Recovery)
 - Centered card (`#FFFFFF` light / `#111C2E` dark, `12–16px` radius, crisp border) on calm app background (`#F5F7FA` / `#0B1220`).
-- Uses the **stacked logo** (`athar-academy-stacked.svg` on light, `athar-academy-dark.svg` on dark) centered above the form with generous clear space.
+- Uses the existing primary logo or app icon, whichever fits the available space, centered above the form with generous clear space. Dedicated stacked/dark variants are future assets, not current dependencies.
 - Top-corner Language & Theme controls so users can switch before signing in.
 - Accessible inputs with persistent top labels (never placeholder-only), brand Blue focus ring, and inline semantic Error messages with icons.
 
@@ -87,7 +87,7 @@ All colors come exclusively from CSS custom properties—no raw HEX values scatt
 ### H. Transactional & Educational Emails
 - **Light-First High-Contrast Design** (per `SKILL.md` §6, since email clients vary widely in dark-mode behavior):
   - Outer background: `#F5F7FA`; Email container: `#FFFFFF` with `#E2E8F0` border.
-  - Header: Clean light header featuring `athar-academy-logo` (hosted PNG/SVG fallback compatible with Gmail/Outlook) or Navy banner with `athar-academy-dark`.
+  - Header: Clean light header featuring the existing primary PNG logo (`Athar Academy_ Learn, Grow, Impact.png`) or a Navy banner with the existing app icon (`Athar Academy Icon Logo.png`) hosted reliably for email clients.
   - Primary CTA button: Brand Blue (`#2563EB`) with white bold text.
   - Typography: Inter / system sans-serif for English (`dir="ltr"`), Cairo / Tahoma / Arial for Arabic (`dir="rtl"`), matched automatically to the recipient's `profiles.locale`.
   - Footer: Tagline, unsubscribe/notification preference link, and clear sender attribution.

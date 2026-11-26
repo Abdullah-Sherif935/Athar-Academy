@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ar" dir="rtl" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="ATHAR ACADEMY — Multi-disciplinary bilingual learning platform. Learn, Grow, Make an Impact."
+    />
+    <link rel="icon" type="image/png" href="./logo and prand/Athar Academy Icon Logo.png" />
+    <title>أكاديمية أثر | ATHAR ACADEMY</title>
+    <script>
+      (function () {
+        try {
+          var THEME_KEY = 'athar-theme';
+          var LOCALE_KEY = 'athar-locale';
+          var savedTheme = localStorage.getItem(THEME_KEY) || 'system';
+          var prefersDark =
+            window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var resolvedTheme =
+            savedTheme === 'light' || savedTheme === 'dark'
+              ? savedTheme
+              : prefersDark
+                ? 'dark'
+                : 'light';
+          document.documentElement.setAttribute('data-theme', resolvedTheme);
+
+          var savedLocale = localStorage.getItem(LOCALE_KEY);
+          var locale = savedLocale === 'en' || savedLocale === 'ar' ? savedLocale : 'ar';
+          document.documentElement.lang = locale;
+          document.documentElement.dir = locale === 'ar' ? 'rtl' : 'ltr';
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'light');
+          document.documentElement.lang = 'ar';
+          document.documentElement.dir = 'rtl';
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
