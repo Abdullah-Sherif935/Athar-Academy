@@ -29,9 +29,9 @@
 | Task | Status | Evidence |
 |---|---|---|
 | **1. Interactive `npx supabase login`** | **BLOCKED** | Non-TTY shell (`LoginMissingTokenError: Cannot use automatic login flow inside non-TTY environments`). |
-| **2. Apply Migration `0014`** (`supabase/migrations/0014_instructor_read_enrolled_student_profiles.sql`) | **BLOCKED** | Requires either an interactive local `npx supabase login` session (run by owner in a TTY terminal), `supabase_mcp` confirmation approval, or direct execution in Supabase Dashboard SQL Editor. `pg_policies` confirms `profiles_instructor_enrolled_students` is not yet applied; migrations `0001`–`0013` and all 3 existing `public.profiles` RLS policies remain intact. |
-| **3. Instructor Profile Visibility (Post-0014)** | **NOT TESTED** | Pending Migration `0014` execution. |
-| **4. Enable Leaked Password Protection** | **BLOCKED** | No authorized Auth configuration tool in `supabase_mcp` and no authenticated Management API session. `get_advisors(type="security")` confirms `auth_leaked_password_protection` remains `WARN` (disabled). |
+| **2. Apply Migration `0014`** (`supabase/migrations/0014_instructor_read_enrolled_student_profiles.sql`) | **PASS** | Executed by owner in Supabase SQL Editor and verified in `pg_policies`: `profiles_instructor_enrolled_students` (`FOR SELECT TO authenticated`) is active alongside all 3 existing `public.profiles` RLS policies. |
+| **3. Instructor Profile Visibility & Isolation (Post-0014)** | **PASS** | Verified via live authenticated PostgREST: Lead Instructor (`instructor.onboarding.qa@atharacademy.org`) reads `Omar Khaled Al-Masri` (`student.workflow03.qa@atharacademy.org`); Lead Instructor reading unrelated Super Admin profile returns `0` rows; Student reading Super Admin profile returns `0` rows. |
+| **4. Enable Leaked Password Protection** | **BLOCKED** | `get_advisors(type="security")` still reports `auth_leaked_password_protection` (`WARN`) — requires Supabase Auth Dashboard toggle (note: HaveIBeenPwned Leaked Password Protection requires Supabase Pro plan if unavailable on Free tier). |
 | **5. Production Regression & Security Baseline** | **PASS** | Production app (`https://athar-academy-peach.vercel.app`, `dpl_9F8tLD9E2dKFEwAc3txSC6NphqSB`), all 36 RLS-enabled tables, 23 audited `SECURITY DEFINER` RPCs, and active QA enrollment/progress/audit records remain intact with zero regressions. |
 
 ---
