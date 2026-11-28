@@ -203,14 +203,18 @@ Deno.serve(async (req: Request) => {
     newUserId = inviteRes.data.user.id;
   }
 
-  // Generate a direct one-time setup link so Admin can also copy/share securely
+  // Generate a direct one-time setup link that lands directly on /set-password with token_hash
   let setupLink: string | null = null;
   const linkRes = await supabaseAdmin.auth.admin.generateLink({
     type: 'recovery',
     email,
     options: { redirectTo },
   });
-  if (!linkRes.error && linkRes.data?.properties?.action_link) {
+  if (!linkRes.error && linkRes.data?.properties?.hashed_token) {
+    const tokenHash = encodeURIComponent(linkRes.data.properties.hashed_token);
+    const sep = redirectTo.includes('?') ? '&' : '?';
+    setupLink = `${redirectTo}${sep}token_hash=${tokenHash}&type=recovery`;
+  } else if (!linkRes.error && linkRes.data?.properties?.action_link) {
     setupLink = linkRes.data.properties.action_link;
   }
 

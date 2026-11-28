@@ -1,6 +1,6 @@
 import { CheckCircle2, KeyRound } from 'lucide-react';
-import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useState, type FormEvent } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../../app/providers/AuthProvider';
 import { useI18n } from '../../../app/providers/I18nProvider';
 import { BrandLogo } from '../../../components/brand/BrandLogo';
@@ -12,7 +12,9 @@ export function SetPasswordPage() {
   const { locale } = useI18n();
   const { user, isLoading, refreshAuth, getHomeRoute } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
+  const [verifyingToken, setVerifyingToken] = useState(false);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -20,6 +22,32 @@ export function SetPasswordPage() {
   const [done, setDone] = useState(false);
 
   const isAr = locale === 'ar';
+
+  useEffect(() => {
+    const tokenHash = searchParams.get('token_hash');
+    const typeParam = searchParams.get('type');
+    if (!tokenHash || !supabase || user) return;
+
+    let active = true;
+    setVerifyingToken(true);
+    setError(null);
+    const otpType = typeParam === 'invite' ? 'invite' : 'recovery';
+    void supabase.auth
+      .verifyOtp({ token_hash: tokenHash, type: otpType })
+      .then(async ({ error: otpErr }) => {
+        if (!active) return;
+        if (otpErr) {
+          setError(otpErr.message);
+        } else {
+          await refreshAuth();
+        }
+        setVerifyingToken(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [refreshAuth, searchParams, user]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -85,7 +113,7 @@ export function SetPasswordPage() {
             </p>
           </div>
 
-          {isLoading ? (
+          {isLoading || verifyingToken ? (
             <p className="text-body" style={{ textAlign: 'center' }}>
               {isAr ? 'جارٍ التحقق من رابط الدعوة...' : 'Verifying your setup link...'}
             </p>
