@@ -1073,7 +1073,7 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         }),
       );
     },
-    [],
+    [user],
   );
 
   const moveLessonToModule = useCallback(
@@ -1108,7 +1108,7 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         }),
       );
     },
-    [],
+    [user],
   );
 
   const saveLessonChanges = useCallback(
@@ -1284,7 +1284,7 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
       }
       return { status: nextStatus, isRevision: false };
     },
-    [courses, pushActivity, settings.requireLessonApproval],
+    [courses, pushActivity, settings.requireLessonApproval, user],
   );
 
   // Course Proposals (Workflow B)
@@ -2345,6 +2345,7 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
       enrollmentDisputes,
       pushStudentNotification,
       suspendEnrollment,
+      user,
     ],
   );
 
