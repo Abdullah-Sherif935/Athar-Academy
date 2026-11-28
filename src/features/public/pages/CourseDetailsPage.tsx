@@ -7,8 +7,8 @@ import {
   Target,
   Users,
 } from 'lucide-react';
-import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useAuth } from '../../../app/providers/AuthProvider';
 import { useI18n } from '../../../app/providers/I18nProvider';
 import { usePlatformDemo } from '../../../app/providers/PlatformDemoContext';
 import {
@@ -17,13 +17,13 @@ import {
   InstructorCard,
   SectionHeading,
 } from '../../../components/shared';
-import { Alert, Badge, Button, Card, EmptyState, Modal } from '../../../components/ui';
+import { Alert, Badge, Card, EmptyState } from '../../../components/ui';
 
 export function CourseDetailsPage() {
   const { slug = '' } = useParams();
   const { t, locale } = useI18n();
+  const { user } = useAuth();
   const { courses, disciplines, instructors: allInstructors } = usePlatformDemo();
-  const [enrollModalOpen, setEnrollModalOpen] = useState(false);
 
   const course = courses.find((c) => c.slug === slug && c.status === 'published');
 
@@ -120,20 +120,23 @@ export function CourseDetailsPage() {
             {/* Curriculum Preview */}
             <div className="details-stack" style={{ gap: 14 }}>
               <h2 className="text-h2">{t('courseDetails.curriculumTitle')}</h2>
-              {course.modules.map((mod) => (
+              {course.modules.map((mod) => {
+                const visibleLessons = mod.lessons.filter((l) => l.status === 'published');
+                return (
                 <div key={mod.id} className="curriculum-module">
                   <div className="curriculum-module__head">
                     <span>{mod.title[locale]}</span>
                     <Badge variant="neutral">
-                      {t('common.lessonsCount', {
-                        count: mod.lessons.filter((l) => l.status === 'published').length,
-                      })}
+                      {visibleLessons.length > 0
+                        ? t('common.lessonsCount', { count: visibleLessons.length })
+                        : locale === 'ar'
+                          ? 'محتوى للمسجلين'
+                          : 'Enrolled Content'}
                     </Badge>
                   </div>
                   <ul className="curriculum-lessons">
-                    {mod.lessons
-                      .filter((l) => l.status === 'published')
-                      .map((lesson) => (
+                    {visibleLessons.length > 0 ? (
+                      visibleLessons.map((lesson) => (
                       <li key={lesson.id} className="curriculum-lesson">
                         <div className="curriculum-lesson__left">
                           {lesson.isPreview ? (
@@ -152,10 +155,23 @@ export function CourseDetailsPage() {
                           </span>
                         </div>
                       </li>
-                    ))}
+                      ))
+                    ) : (
+                      <li className="curriculum-lesson">
+                        <div className="curriculum-lesson__left">
+                          <Lock size={15} style={{ color: 'var(--text-secondary)' }} aria-hidden="true" />
+                          <span className="text-caption" style={{ color: 'var(--text-secondary)' }}>
+                            {locale === 'ar'
+                              ? 'تُفتح دروس هذه الوحدة بعد اعتماد الالتحاق وتأكيد الدفع المباشر.'
+                              : 'Lessons in this module unlock after enrollment approval and direct payment confirmation.'}
+                          </span>
+                        </div>
+                      </li>
+                    )}
                   </ul>
                 </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Requirements & Target Audience */}
@@ -246,14 +262,51 @@ export function CourseDetailsPage() {
                     <span>{discipline.name[locale]}</span>
                   </div>
                 ) : null}
+                <div className="meta-kv-row">
+                  <span>{locale === 'ar' ? 'الرسوم' : 'Price'}</span>
+                  <strong>
+                    {course.pricing.isFree
+                      ? t('admin.paymentStatuses.not_required')
+                      : `${course.pricing.priceAmount.toLocaleString()} ${course.pricing.currency}`}
+                  </strong>
+                </div>
+                <div className="meta-kv-row">
+                  <span>{locale === 'ar' ? 'حالة التسجيل' : 'Enrollment'}</span>
+                  <Badge variant={course.pricing.enrollmentOpen ? 'success' : 'neutral'}>
+                    {course.pricing.enrollmentOpen
+                      ? locale === 'ar'
+                        ? 'التسجيل مفتوح'
+                        : 'Enrollment Open'
+                      : locale === 'ar'
+                        ? 'التسجيل مغلق'
+                        : 'Enrollment Closed'}
+                  </Badge>
+                </div>
               </div>
 
-              <Button variant="primary" size="lg" onClick={() => setEnrollModalOpen(true)}>
-                {t('courseDetails.requestEnrollment')}
-              </Button>
+              {course.pricing.enrollmentOpen ? (
+                <Link
+                  to={user ? `/student/explore-courses/${course.slug}` : '/login'}
+                  className="ui-btn ui-btn--primary ui-btn--lg"
+                  style={{ textAlign: 'center' }}
+                >
+                  {user
+                    ? locale === 'ar'
+                      ? 'طلب الالتحاق بالدورة'
+                      : 'Request Enrollment'
+                    : locale === 'ar'
+                      ? 'سجّل الدخول لطلب الالتحاق'
+                      : 'Sign In to Request Enrollment'}
+                </Link>
+              ) : (
+                <Alert variant="warning" title={locale === 'ar' ? 'التسجيل مغلق حاليًا' : 'Enrollment Currently Closed'} />
+              )}
 
-              <Alert variant="info" title={t('common.demoBadge')}>
-                {t('courseDetails.demoNote')}
+              <Alert
+                variant="info"
+                title={locale === 'ar' ? 'الدفع المباشر مع المدرب' : 'Direct-to-Instructor Payment'}
+              >
+                {course.pricing.paymentInstructions[locale]}
               </Alert>
             </Card>
           </aside>
@@ -277,30 +330,6 @@ export function CourseDetailsPage() {
           </div>
         </section>
       ) : null}
-
-      <Modal
-        isOpen={enrollModalOpen}
-        onClose={() => setEnrollModalOpen(false)}
-        title={t('courseDetails.enrollModalTitle')}
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setEnrollModalOpen(false)}>
-              {t('courseDetails.enrollModalClose')}
-            </Button>
-            <Link
-              to="/register"
-              className="ui-btn ui-btn--primary ui-btn--md"
-              onClick={() => setEnrollModalOpen(false)}
-            >
-              {t('courseDetails.enrollModalRegister')}
-            </Link>
-          </>
-        }
-      >
-        <Alert variant="info" title={course.title[locale]}>
-          {t('courseDetails.enrollModalBody')}
-        </Alert>
-      </Modal>
     </>
   );
 }

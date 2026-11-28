@@ -2,6 +2,7 @@ import { CheckCircle2, FolderSearch } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useI18n } from '../../../app/providers/I18nProvider';
+import { usePlatformDemo } from '../../../app/providers/PlatformDemoContext';
 import {
   CourseCard,
   DisciplineIcon,
@@ -9,13 +10,8 @@ import {
   SearchBar,
   SectionHeading,
 } from '../../../components/shared';
-import { Badge, Button, Card, EmptyState } from '../../../components/ui';
-import {
-  getCoursesByDiscipline,
-  getDisciplineBySlug,
-  getInstructorsByDiscipline,
-  type CourseLevel,
-} from '../../../data/mock';
+import { Button, Card, EmptyState } from '../../../components/ui';
+import type { CourseLevel } from '../../../data/mock';
 
 const LEVEL_RANK: Record<CourseLevel, number> = {
   beginner: 1,
@@ -26,15 +22,21 @@ const LEVEL_RANK: Record<CourseLevel, number> = {
 export function DisciplineDetailsPage() {
   const { slug = '' } = useParams();
   const { t, locale } = useI18n();
-  const discipline = getDisciplineBySlug(slug);
+  const { disciplines, courses: platformCourses, instructors: allInstructors } = usePlatformDemo();
+  const discipline = disciplines.find((d) => d.slug === slug);
 
   const [query, setQuery] = useState('');
   const [levelFilter, setLevelFilter] = useState<'all' | CourseLevel>('all');
   const [sortBy, setSortBy] = useState<'featured' | 'titleAsc' | 'levelAsc'>('featured');
 
   const allCourses = useMemo(
-    () => (discipline ? getCoursesByDiscipline(discipline.slug) : []),
-    [discipline],
+    () =>
+      discipline
+        ? platformCourses.filter(
+            (c) => c.disciplineSlug === discipline.slug && c.status === 'published',
+          )
+        : [],
+    [discipline, platformCourses],
   );
 
   const filteredCourses = useMemo(() => {
@@ -75,7 +77,10 @@ export function DisciplineDetailsPage() {
     );
   }
 
-  const instructors = getInstructorsByDiscipline(discipline.slug);
+  const assignedInstSlugs = new Set(allCourses.flatMap((c) => c.instructorSlugs));
+  const instructors = allInstructors.filter(
+    (i) => assignedInstSlugs.has(i.slug) || i.disciplineSlugs.includes(discipline.slug),
+  );
 
   return (
     <>
@@ -94,7 +99,6 @@ export function DisciplineDetailsPage() {
               <div className={`discipline-card__icon accent-badge--${discipline.accent}`}>
                 <DisciplineIcon name={discipline.iconName} size={24} />
               </div>
-              <Badge variant="orange">{t('common.demoBadge')}</Badge>
             </div>
 
             <h1 className="text-display">{discipline.name[locale]}</h1>

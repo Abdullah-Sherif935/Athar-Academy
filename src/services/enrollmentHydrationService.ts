@@ -67,7 +67,7 @@ export async function fetchOperationalSnapshot(
 
   const [reqRes, enrollRes, progRes, notifRes, auditRes, dispRes] = await Promise.all([
     supabase.from('enrollment_requests').select('*').order('created_at', { ascending: false }),
-    supabase.from('course_enrollments').select('*').order('enrolled_at', { ascending: false }),
+    supabase.from('course_enrollments').select('*').order('activated_at', { ascending: false }),
     supabase.from('lesson_progress').select('*').eq('student_id', userId),
     supabase
       .from('notifications')
@@ -223,7 +223,7 @@ export async function fetchOperationalSnapshot(
       return {
         courseSlug,
         completedLessonIds: completedByCourseId.get(e.course_id) ?? [],
-        lastAccessedLabel: formatDateLabel(e.last_accessed_at ?? e.enrolled_at),
+        lastAccessedLabel: formatDateLabel(e.last_accessed_at ?? e.activated_at),
         lastLessonId: lastInfo?.lessonId ?? '',
         isSuspended: Boolean(e.is_suspended),
       };
