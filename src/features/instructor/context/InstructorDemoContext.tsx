@@ -2,12 +2,17 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
 } from 'react';
 import { useAuth } from '../../../app/providers/AuthProvider';
 import { usePlatformDemo } from '../../../app/providers/PlatformDemoContext';
+import {
+  fetchOwnInstructorPortalData,
+  updateOwnInstructorProfileInDb,
+} from '../../../services/instructorOnboardingService';
 import {
   dbCreateAnnouncement,
   dbCreateCommunityPost,
@@ -175,11 +180,12 @@ export interface InstructorDemoContextValue {
 const InstructorDemoContext = createContext<InstructorDemoContextValue | null>(null);
 
 export function InstructorDemoProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, profile: authProfile } = useAuth();
   const platform = usePlatformDemo();
 
   const [isDemoActive, setIsDemoActive] = useState<boolean>(readInitialActive);
   const [profile, setProfile] = useState<InstructorProfileState>(INITIAL_INSTRUCTOR_PROFILE);
+  const [realAssignedSlugs, setRealAssignedSlugs] = useState<string[] | null>(null);
   const [students] = useState<AssignedStudentRecord[]>(INITIAL_ASSIGNED_STUDENTS);
   const [posts, setPosts] = useState<ModerationPostItem[]>(INITIAL_INSTRUCTOR_COMMUNITY_POSTS);
   const [announcements, setAnnouncements] = useState<InstructorAnnouncementRecord[]>(
@@ -191,17 +197,53 @@ export function InstructorDemoProvider({ children }: { children: ReactNode }) {
   const [notificationPrefs, setNotificationPrefs] =
     useState<InstructorNotificationPreferences>(INITIAL_INSTRUCTOR_PREFS);
 
+  // Hydrate real instructor profile and assigned courses from Supabase when signed in
+  useEffect(() => {
+    if (!user) {
+      setRealAssignedSlugs(null);
+      return;
+    }
+    let active = true;
+    void fetchOwnInstructorPortalData(user.id).then((res) => {
+      if (!active) return;
+      setRealAssignedSlugs(res.assignedCourseSlugs);
+      if (res.instructorProfile) {
+        const ip = res.instructorProfile;
+        setProfile((prev) => ({
+          ...prev,
+          slug: ip.slug,
+          fullName: ip.fullName,
+          initials: ip.initials,
+          title: ip.title,
+          biography: ip.biography,
+          expertise: ip.expertise,
+        }));
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
   const platformInstructor = platform.instructors.find((i) => i.slug === DEMO_INSTRUCTOR_SLUG);
-  const isInstructorDisabled = platformInstructor ? platformInstructor.status !== 'active' : false;
+  const isInstructorDisabled = user
+    ? Boolean(authProfile && authProfile.account_status !== 'active')
+    : platformInstructor
+      ? platformInstructor.status !== 'active'
+      : false;
 
   const assignedCourses = useMemo(
     () =>
       isInstructorDisabled
         ? []
-        : platform.courses.filter(
+        : user
+          ? platform.courses.filter(
+            (c) => (realAssignedSlugs ?? []).includes(c.slug) && c.status !== 'archived',
+          )
+          : platform.courses.filter(
             (c) => c.instructorSlugs.includes(DEMO_INSTRUCTOR_SLUG) && c.status !== 'archived',
           ),
-    [isInstructorDisabled, platform.courses],
+    [isInstructorDisabled, platform.courses, realAssignedSlugs, user],
   );
 
   const enterDemoMode = useCallback(() => {
@@ -234,13 +276,25 @@ export function InstructorDemoProvider({ children }: { children: ReactNode }) {
   const updateProfile = useCallback(
     (patch: Partial<InstructorProfileState>) => {
       setProfile((prev) => ({ ...prev, ...patch }));
-      platform.updateInstructor(DEMO_INSTRUCTOR_SLUG, {
-        name: patch.fullName,
-        title: patch.title,
-        biography: patch.biography,
-      });
+      if (user) {
+        void updateOwnInstructorProfileInDb(user.id, {
+          fullNameAr: patch.fullName?.ar,
+          fullNameEn: patch.fullName?.en,
+          titleAr: patch.title?.ar,
+          titleEn: patch.title?.en,
+          biographyAr: patch.biography?.ar,
+          biographyEn: patch.biography?.en,
+          website: patch.website,
+        });
+      } else {
+        platform.updateInstructor(DEMO_INSTRUCTOR_SLUG, {
+          name: patch.fullName,
+          title: patch.title,
+          biography: patch.biography,
+        });
+      }
     },
-    [platform],
+    [platform, user],
   );
 
   const getAssignedCourse = useCallback(
@@ -424,19 +478,19 @@ export function InstructorDemoProvider({ children }: { children: ReactNode }) {
         prev.map((post) =>
           post.id === postId
             ? {
-                ...post,
-                replies: [
-                  ...post.replies,
-                  {
-                    id: `irep-${Date.now()}`,
-                    authorName: profile.fullName,
-                    authorRole: 'instructor',
-                    initials: profile.initials,
-                    content: { ar: trimmed, en: trimmed },
-                    timeLabel: { ar: 'الآن (تجريبي)', en: 'Just now (Demo)' },
-                  },
-                ],
-              }
+              ...post,
+              replies: [
+                ...post.replies,
+                {
+                  id: `irep-${Date.now()}`,
+                  authorName: profile.fullName,
+                  authorRole: 'instructor',
+                  initials: profile.initials,
+                  content: { ar: trimmed, en: trimmed },
+                  timeLabel: { ar: 'الآن (تجريبي)', en: 'Just now (Demo)' },
+                },
+              ],
+            }
             : post,
         ),
       );
@@ -598,18 +652,18 @@ export function InstructorDemoProvider({ children }: { children: ReactNode }) {
         prev.map((conv) =>
           conv.id === conversationId
             ? {
-                ...conv,
-                unreadCount: 0,
-                messages: [
-                  ...conv.messages,
-                  {
-                    id: `im-${Date.now()}`,
-                    sender: 'instructor',
-                    content: { ar: trimmed, en: trimmed },
-                    timeLabel: { ar: 'الآن (تجريبي)', en: 'Just now (Demo)' },
-                  },
-                ],
-              }
+              ...conv,
+              unreadCount: 0,
+              messages: [
+                ...conv.messages,
+                {
+                  id: `im-${Date.now()}`,
+                  sender: 'instructor',
+                  content: { ar: trimmed, en: trimmed },
+                  timeLabel: { ar: 'الآن (تجريبي)', en: 'Just now (Demo)' },
+                },
+              ],
+            }
             : conv,
         ),
       );

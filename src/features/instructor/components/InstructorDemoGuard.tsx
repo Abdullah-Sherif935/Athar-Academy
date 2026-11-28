@@ -10,7 +10,7 @@ import { useInstructorDemo } from '../context/InstructorDemoContext';
 
 export function InstructorDemoGuard({ children }: { children: React.ReactNode }) {
   const { isDemoActive, enterDemoMode, profile } = useInstructorDemo();
-  const { user, isLoading, hasRole, getHomeRoute, signOut } = useAuth();
+  const { user, profile: authProfile, isLoading, hasRole, getHomeRoute, signOut } = useAuth();
   const { t, locale } = useI18n();
 
   if (isLoading) {
@@ -22,6 +22,32 @@ export function InstructorDemoGuard({ children }: { children: React.ReactNode })
   }
 
   if (user) {
+    if (authProfile && authProfile.account_status !== 'active') {
+      const isAr = locale === 'ar';
+      return (
+        <div className="container" style={{ paddingBlock: 64, maxWidth: 520 }}>
+          <Card className="auth-card">
+            <div className="auth-card__brand">
+              <ShieldAlert size={36} style={{ color: 'var(--error)' }} aria-hidden="true" />
+              <h1 className="text-h2">
+                {isAr ? 'تم تعليق وصول حساب المدرب' : 'Instructor Account Suspended'}
+              </h1>
+              <p className="text-body">
+                {isAr
+                  ? 'حسابك غير نشط حالياً. يرجى التواصل مع إدارة أكاديمية أثر.'
+                  : 'Your instructor access is currently inactive or suspended. Please contact ATHAR ACADEMY administration.'}
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <Button variant="secondary" onClick={() => void signOut()}>
+                {isAr ? 'تسجيل الخروج' : 'Sign Out'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      );
+    }
+
     if (hasRole('instructor')) {
       return <>{children}</>;
     }
@@ -105,19 +131,19 @@ export function InstructorDemoGuard({ children }: { children: React.ReactNode })
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <Link to="/login" className="ui-btn ui-btn--primary ui-btn--lg">
-                {t('auth.login.submitButton')}
-              </Link>
-              <Button variant="secondary" size="md" onClick={enterDemoMode}>
-                {t('instructor.guard.enterButton')}
-              </Button>
-              <Link to="/" className="ui-btn ui-btn--tertiary ui-btn--md">
-                {t('instructor.guard.backPublic')}
-              </Link>
+                <Link to="/login" className="ui-btn ui-btn--primary ui-btn--lg">
+                  {t('auth.login.submitButton')}
+                </Link>
+                <Button variant="secondary" size="md" onClick={enterDemoMode}>
+                  {t('instructor.guard.enterButton')}
+                </Button>
+                  <Link to="/" className="ui-btn ui-btn--tertiary ui-btn--md">
+                    {t('instructor.guard.backPublic')}
+                  </Link>
+                </div>
+              </Card>
             </div>
-          </Card>
+          </main>
         </div>
-      </main>
-    </div>
-  );
+        );
 }

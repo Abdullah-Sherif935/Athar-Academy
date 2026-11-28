@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { useAuth } from '../../../app/providers/AuthProvider';
 import { useI18n } from '../../../app/providers/I18nProvider';
 import { Alert, Badge, Button, Card, Input, Textarea } from '../../../components/ui';
 import { StudentPageHeader } from '../../student/components/StudentPageHeader';
@@ -6,6 +7,7 @@ import { useInstructorDemo } from '../context/InstructorDemoContext';
 
 export function InstructorOwnProfilePage() {
   const { t, locale } = useI18n();
+  const { user } = useAuth();
   const { profile, updateProfile } = useInstructorDemo();
 
   const [fullName, setFullName] = useState(profile.fullName[locale]);
@@ -13,6 +15,13 @@ export function InstructorOwnProfilePage() {
   const [bio, setBio] = useState(profile.biography[locale]);
   const [website, setWebsite] = useState(profile.website ?? '');
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    setFullName(profile.fullName[locale]);
+    setTitle(profile.title[locale]);
+    setBio(profile.biography[locale]);
+    setWebsite(profile.website ?? '');
+  }, [locale, profile]);
 
   const handleSave = (event: FormEvent) => {
     event.preventDefault();
@@ -43,7 +52,7 @@ export function InstructorOwnProfilePage() {
               {profile.initials}
             </div>
             <div>
-              <Badge variant="orange">{t('common.demoBadge')}</Badge>
+              {!user ? <Badge variant="orange">{t('common.demoBadge')}</Badge> : null}
               <h2 className="text-h2" style={{ marginBlockStart: 6 }}>
                 {profile.fullName[locale]}
               </h2>

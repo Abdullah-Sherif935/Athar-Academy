@@ -49,6 +49,7 @@ import { InstructorsPage } from '../../features/public/pages/InstructorsPage';
 import { LoginPage } from '../../features/public/pages/LoginPage';
 import { NotFoundPage } from '../../features/public/pages/NotFoundPage';
 import { RegisterPage } from '../../features/public/pages/RegisterPage';
+import { SetPasswordPage } from '../../features/public/pages/SetPasswordPage';
 import { StudentLayout } from '../../features/student/components/StudentLayout';
 import { CertificatesPage } from '../../features/student/pages/CertificatesPage';
 import { CommunityListPage } from '../../features/student/pages/CommunityListPage';
@@ -82,6 +83,7 @@ export function AppRouter() {
           <Route path="/instructors/:slug" element={<InstructorProfilePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/set-password" element={<SetPasswordPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>
 
