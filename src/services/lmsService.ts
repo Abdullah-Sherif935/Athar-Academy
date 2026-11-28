@@ -9,6 +9,7 @@ import type {
   PaymentMethodType,
   PlatformCourse,
   PlatformDiscipline,
+  PlatformInstructor,
   PlatformLesson,
   PlatformModule,
   ReviewStatus,
@@ -18,9 +19,11 @@ import type { CourseLevel } from '../data/mock/types';
 export interface LiveCatalogSnapshot {
   disciplines: PlatformDiscipline[];
   courses: PlatformCourse[];
+  instructors: PlatformInstructor[];
   courseIdBySlug: Record<string, string>;
   courseSlugById: Record<string, string>;
   disciplineIdBySlug: Record<string, string>;
+  instructorSlugById: Record<string, string>;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -57,18 +60,80 @@ const COMMUNITY_MAX_BYTES = 10 * 1024 * 1024;
 export async function fetchLiveCatalog(): Promise<LiveCatalogSnapshot | null> {
   if (!supabase) return null;
 
-  const [discRes, courseRes, modRes, lesRes, payRes, resRes] = await Promise.all([
+  const [discRes, courseRes, modRes, lesRes, payRes, resRes, ciRes, ipRes] = await Promise.all([
     supabase.from('disciplines').select('*').order('created_at', { ascending: true }),
     supabase.from('courses').select('*').order('created_at', { ascending: false }),
     supabase.from('course_modules').select('*').order('sort_order', { ascending: true }),
     supabase.from('lessons').select('*').order('sort_order', { ascending: true }),
     supabase.from('course_payment_settings').select('*'),
     supabase.from('lesson_resources').select('*').order('created_at', { ascending: true }),
+    supabase.from('course_instructors').select('course_id, instructor_id, role, can_confirm_payments'),
+    supabase
+      .from('instructor_profiles')
+      .select(
+        'user_id, slug, title_ar, title_en, short_bio_ar, short_bio_en, biography_ar, biography_en, expertise, accent, created_at, profiles:user_id (id, full_name_ar, full_name_en, initials, account_status)',
+      ),
   ]);
 
   if (discRes.error || courseRes.error || !discRes.data || !courseRes.data) {
     return null;
   }
+
+  const instructorSlugById: Record<string, string> = {};
+  const instructors: PlatformInstructor[] = (ipRes.data ?? []).map((ip) => {
+    const prof = (Array.isArray(ip.profiles) ? ip.profiles[0] : ip.profiles) as {
+      id?: string;
+      full_name_ar?: string;
+      full_name_en?: string;
+      initials?: string;
+      account_status?: string;
+    } | null;
+    instructorSlugById[ip.user_id] = ip.slug;
+    const nameAr = prof?.full_name_ar || prof?.full_name_en || ip.slug;
+    const nameEn = prof?.full_name_en || prof?.full_name_ar || ip.slug;
+    const expertiseArr = Array.isArray(ip.expertise)
+      ? ip.expertise.map((item: unknown) =>
+          typeof item === 'string'
+            ? { ar: item, en: item }
+            : (item as { ar: string; en: string }),
+        )
+      : [];
+    return {
+      slug: ip.slug,
+      name: { ar: nameAr, en: nameEn },
+      title: { ar: ip.title_ar ?? '', en: ip.title_en ?? '' },
+      initials: prof?.initials || 'IN',
+      email: '',
+      accent: (ip.accent as PlatformInstructor['accent']) ?? 'teal',
+      shortBio: { ar: ip.short_bio_ar ?? '', en: ip.short_bio_en ?? '' },
+      biography: { ar: ip.biography_ar ?? '', en: ip.biography_en ?? '' },
+      expertise: expertiseArr,
+      experience: [],
+      disciplineSlugs: [],
+      status: prof?.account_status === 'suspended' ? 'inactive' : 'active',
+      joinedDate: { ar: 'مسجّل', en: 'Active' },
+    };
+  });
+
+  const instructorsByCourseId = new Map<
+    string,
+    { slugs: string[]; leadSlug?: string; managerSlugs: string[] }
+  >();
+  (ciRes.data ?? []).forEach((ci) => {
+    const slug = instructorSlugById[ci.instructor_id];
+    if (!slug) return;
+    const entry = instructorsByCourseId.get(ci.course_id) ?? {
+      slugs: [],
+      leadSlug: undefined,
+      managerSlugs: [],
+    };
+    if (!entry.slugs.includes(slug)) entry.slugs.push(slug);
+    if (ci.role === 'lead') entry.leadSlug = slug;
+    if (ci.can_confirm_payments && !entry.managerSlugs.includes(slug)) {
+      entry.managerSlugs.push(slug);
+    }
+    instructorsByCourseId.set(ci.course_id, entry);
+  });
 
   const disciplineIdBySlug: Record<string, string> = {};
   const disciplineSlugById: Record<string, string> = {};
@@ -167,6 +232,7 @@ export async function fetchLiveCatalog(): Promise<LiveCatalogSnapshot | null> {
     courseIdBySlug[c.slug] = c.id;
     courseSlugById[c.id] = c.slug;
     const pay = payByCourseId.get(c.id);
+    const assigned = instructorsByCourseId.get(c.id);
     return {
       slug: c.slug,
       code: c.code,
@@ -174,9 +240,9 @@ export async function fetchLiveCatalog(): Promise<LiveCatalogSnapshot | null> {
       shortDescription: { ar: c.short_description_ar ?? '', en: c.short_description_en ?? '' },
       fullDescription: { ar: c.full_description_ar ?? '', en: c.full_description_en ?? '' },
       disciplineSlug: disciplineSlugById[c.discipline_id] ?? 'software-technology',
-      instructorSlugs: [],
-      leadInstructorSlug: undefined,
-      enrollmentManagerSlugs: [],
+      instructorSlugs: assigned?.slugs ?? [],
+      leadInstructorSlug: assigned?.leadSlug ?? assigned?.slugs[0],
+      enrollmentManagerSlugs: assigned?.managerSlugs ?? [],
       pricing: {
         isFree: Boolean(pay?.is_free),
         priceAmount: Number(pay?.price_amount ?? 1500),
@@ -228,9 +294,11 @@ export async function fetchLiveCatalog(): Promise<LiveCatalogSnapshot | null> {
   return {
     disciplines,
     courses,
+    instructors,
     courseIdBySlug,
     courseSlugById,
     disciplineIdBySlug,
+    instructorSlugById,
   };
 }
 

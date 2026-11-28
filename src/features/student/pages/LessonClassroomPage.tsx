@@ -1,7 +1,9 @@
 import {
   ArrowLeft,
   ArrowRight,
+  BookmarkCheck,
   CheckCircle2,
+  Clock,
   Download,
   FileText,
   FolderSearch,
@@ -28,6 +30,8 @@ export function LessonClassroomPage() {
     toggleLessonComplete,
     lessonNotes,
     saveLessonNote,
+    playbackPositions,
+    savePlaybackPosition,
   } = useStudentDemo();
 
   const course = courses.find((c) => c.slug === courseId);
@@ -36,12 +40,20 @@ export function LessonClassroomPage() {
   const [draftNote, setDraftNote] = useState(lessonNotes[noteKey] ?? '');
   const [noteSaved, setNoteSaved] = useState(false);
   const [resourceAlert, setResourceAlert] = useState(false);
+  const savedSeconds = playbackPositions[noteKey] ?? 0;
+  const [positionInput, setPositionInput] = useState<string>(String(savedSeconds));
+  const [positionSaved, setPositionSaved] = useState(false);
 
   useEffect(() => {
     setDraftNote(lessonNotes[noteKey] ?? '');
     setNoteSaved(false);
     setResourceAlert(false);
   }, [noteKey, lessonNotes]);
+
+  useEffect(() => {
+    setPositionInput(String(playbackPositions[noteKey] ?? 0));
+    setPositionSaved(false);
+  }, [noteKey, playbackPositions]);
 
   if (!course || !record) {
     return (
@@ -141,9 +153,59 @@ export function LessonClassroomPage() {
               </div>
             </div>
 
-            <p className="text-caption" style={{ marginBlockStart: 12 }}>
-              {t('student.classroom.demoProgressNote')}
-            </p>
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 10,
+                marginBlockStart: 12,
+                paddingBlockStart: 12,
+                borderTop: '1px solid var(--border-subtle)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <Clock size={15} style={{ color: 'var(--brand-teal)' }} aria-hidden="true" />
+                <span className="text-caption" style={{ fontWeight: 600 }}>
+                  {locale === 'ar' ? 'موضع المشاهدة المحفوظ (بالثواني):' : 'Saved playback position (sec):'}
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  step={15}
+                  value={positionInput}
+                  disabled={!unlocked}
+                  onChange={(e) => {
+                    setPositionInput(e.target.value);
+                    setPositionSaved(false);
+                  }}
+                  aria-label={locale === 'ar' ? 'موضع المشاهدة بالثواني' : 'Playback position in seconds'}
+                  className="ui-input"
+                  style={{ width: 92, padding: '4px 8px', height: 32 }}
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={!unlocked}
+                  onClick={() => {
+                    const sec = Number(positionInput) || 0;
+                    savePlaybackPosition(course.slug, currentLesson.id, sec);
+                    setPositionSaved(true);
+                  }}
+                >
+                  <BookmarkCheck size={14} aria-hidden="true" />{' '}
+                  {locale === 'ar' ? 'حفظ الموضع' : 'Save Position'}
+                </Button>
+                {positionSaved || savedSeconds > 0 ? (
+                  <Badge variant="teal">
+                    {Math.floor((Number(positionInput) || savedSeconds) / 60)}:
+                    {String((Number(positionInput) || savedSeconds) % 60).padStart(2, '0')}
+                  </Badge>
+                ) : null}
+              </div>
+              <p className="text-caption">{t('student.classroom.demoProgressNote')}</p>
+            </div>
           </Card>
 
           {/* Resources */}
@@ -161,27 +223,27 @@ export function LessonClassroomPage() {
                     <span>{res.title[locale]}</span>
                     <Badge variant="teal">{res.type.toUpperCase()}</Badge>
                   </div>
-                  <Button
-                    variant="tertiary"
-                    size="sm"
-                    onClick={async () => {
-                      const target = res.fileNameOrUrl?.trim();
-                      if (target?.startsWith('http://') || target?.startsWith('https://')) {
-                        window.open(target, '_blank', 'noopener,noreferrer');
-                        return;
-                      }
-                      if (target?.includes('/')) {
-                        const { url } = await getSignedResourceUrl(target, 300);
-                        if (url) {
-                          window.open(url, '_blank', 'noopener,noreferrer');
+                    <Button
+                      variant="tertiary"
+                      size="sm"
+                      onClick={async () => {
+                        const target = res.fileNameOrUrl?.trim();
+                        if (target?.startsWith('http://') || target?.startsWith('https://')) {
+                          window.open(target, '_blank', 'noopener,noreferrer');
                           return;
                         }
-                      }
-                      setResourceAlert(true);
-                    }}
-                  >
-                    <Download size={14} aria-hidden="true" /> {t('student.classroom.downloadDemo')}
-                  </Button>
+                        if (target?.includes('/')) {
+                          const { url } = await getSignedResourceUrl(target, 300);
+                          if (url) {
+                            window.open(url, '_blank', 'noopener,noreferrer');
+                            return;
+                          }
+                        }
+                        setResourceAlert(true);
+                      }}
+                    >
+                      <Download size={14} aria-hidden="true" /> {t('student.classroom.downloadDemo')}
+                    </Button>
                 </li>
               ))}
               {course.resources.map((res) => (

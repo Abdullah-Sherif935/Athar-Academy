@@ -187,7 +187,12 @@ export function InstructorDemoProvider({ children }: { children: ReactNode }) {
   const [isDemoActive, setIsDemoActive] = useState<boolean>(readInitialActive);
   const [profile, setProfile] = useState<InstructorProfileState>(INITIAL_INSTRUCTOR_PROFILE);
   const [realAssignedSlugs, setRealAssignedSlugs] = useState<string[] | null>(null);
-  const [students] = useState<AssignedStudentRecord[]>(INITIAL_ASSIGNED_STUDENTS);
+  const [realCanConfirmPaymentSlugs, setRealCanConfirmPaymentSlugs] = useState<string[] | null>(
+    null,
+  );
+  const [students] = useState<AssignedStudentRecord[]>(
+    import.meta.env.DEV ? INITIAL_ASSIGNED_STUDENTS : [],
+  );
   const [posts, setPosts] = useState<ModerationPostItem[]>(INITIAL_INSTRUCTOR_COMMUNITY_POSTS);
   const [announcements, setAnnouncements] = useState<InstructorAnnouncementRecord[]>(
     INITIAL_INSTRUCTOR_ANNOUNCEMENTS,
@@ -204,6 +209,7 @@ export function InstructorDemoProvider({ children }: { children: ReactNode }) {
   const refreshInstructorData = useCallback(async () => {
     if (!user) {
       setRealAssignedSlugs(null);
+      setRealCanConfirmPaymentSlugs(null);
       return;
     }
     const [res] = await Promise.all([
@@ -211,6 +217,7 @@ export function InstructorDemoProvider({ children }: { children: ReactNode }) {
       refreshLiveCatalog(),
     ]);
     setRealAssignedSlugs(res.assignedCourseSlugs);
+    setRealCanConfirmPaymentSlugs(res.canConfirmPaymentCourseSlugs);
     if (res.instructorProfile) {
       const ip = res.instructorProfile;
       setProfile((prev) => ({
@@ -434,31 +441,36 @@ export function InstructorDemoProvider({ children }: { children: ReactNode }) {
     [assignedCourseSlugs, isInstructorDisabled, platform.enrollmentDisputes],
   );
 
+  const actorSlug = user ? profile.slug || user.id : DEMO_INSTRUCTOR_SLUG;
+
   const canConfirmPaymentForCourse = useCallback(
-    (courseSlug: string) => platform.canInstructorConfirmPayment(courseSlug, DEMO_INSTRUCTOR_SLUG),
-    [platform],
+    (courseSlug: string) =>
+      user
+        ? Boolean(realCanConfirmPaymentSlugs?.includes(courseSlug))
+        : platform.canInstructorConfirmPayment(courseSlug, DEMO_INSTRUCTOR_SLUG),
+    [platform, realCanConfirmPaymentSlugs, user],
   );
 
   const acceptEnrollmentForPayment = useCallback(
-    (requestId: string) => platform.acceptEnrollmentForPayment(requestId, DEMO_INSTRUCTOR_SLUG),
-    [platform],
+    (requestId: string) => platform.acceptEnrollmentForPayment(requestId, actorSlug),
+    [actorSlug, platform],
   );
 
   const confirmDirectPayment = useCallback(
-    (requestId: string) => platform.confirmDirectPaymentAndActivate(requestId, DEMO_INSTRUCTOR_SLUG),
-    [platform],
+    (requestId: string) => platform.confirmDirectPaymentAndActivate(requestId, actorSlug),
+    [actorSlug, platform],
   );
 
   const rejectEnrollment = useCallback(
     (requestId: string, reason?: string) =>
-      platform.rejectEnrollmentRequest(requestId, reason, 'instructor', DEMO_INSTRUCTOR_SLUG),
-    [platform],
+      platform.rejectEnrollmentRequest(requestId, reason, 'instructor', actorSlug),
+    [actorSlug, platform],
   );
 
   const cancelEnrollment = useCallback(
     (requestId: string, reason?: string) =>
-      platform.cancelEnrollmentRequest(requestId, 'instructor', DEMO_INSTRUCTOR_SLUG, reason),
-    [platform],
+      platform.cancelEnrollmentRequest(requestId, 'instructor', actorSlug, reason),
+    [actorSlug, platform],
   );
 
   const updateCoursePricing = useCallback(
@@ -470,8 +482,27 @@ export function InstructorDemoProvider({ children }: { children: ReactNode }) {
   );
 
   const getStudentById = useCallback(
-    (id: string) => students.find((s) => s.id === id),
-    [students],
+    (id: string): AssignedStudentRecord | undefined => {
+      const realStudent = platform.students.find((s) => s.id === id);
+      if (realStudent) {
+        return {
+          id: realStudent.id,
+          fullName: realStudent.fullName,
+          initials: realStudent.initials,
+          email: realStudent.email,
+          enrollments: realStudent.enrolledCourseSlugs.map((courseSlug) => ({
+            courseSlug,
+            completedLessons: 0,
+            totalLessons: 0,
+            percent: 0,
+            status: 'active' as const,
+            lastActivity: realStudent.lastActivity,
+          })),
+        };
+      }
+      return students.find((s) => s.id === id);
+    },
+    [platform.students, students],
   );
 
   const replyToPost = useCallback(

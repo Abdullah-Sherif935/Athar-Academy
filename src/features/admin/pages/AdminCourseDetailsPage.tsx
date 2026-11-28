@@ -1,10 +1,12 @@
-import { FolderSearch } from 'lucide-react';
-import { useState } from 'react';
+import { Archive, CheckCircle2, Download, EyeOff, FileText, FolderSearch, Globe, Video } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useI18n } from '../../../app/providers/I18nProvider';
 import { usePlatformDemo } from '../../../app/providers/PlatformDemoContext';
 import { Alert, Badge, Button, Card, EmptyState, Input, Select, Textarea } from '../../../components/ui';
 import type { AdminCourseStatus } from '../../../data/mock/admin';
+import { adminApproveSubmittedCourse } from '../../../services/courseWorkflowService';
+import { dbUpdateCourse, getSignedResourceUrl } from '../../../services/lmsService';
 import { StudentPageHeader } from '../../student/components/StudentPageHeader';
 import { AdminStatusBadge } from '../components/AdminStatusBadge';
 
@@ -15,6 +17,8 @@ export function AdminCourseDetailsPage() {
     courses,
     disciplines,
     instructors,
+    getCourseDbId,
+    refreshLiveCatalog,
     updateCourse,
     setCourseInstructors,
     setCourseLeadAndManagers,
@@ -29,6 +33,29 @@ export function AdminCourseDetailsPage() {
   const [disciplineSlug, setDisciplineSlug] = useState(course?.disciplineSlug ?? '');
   const [status, setStatus] = useState<AdminCourseStatus>(course?.status ?? 'draft');
   const [saved, setSaved] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [actionBanner, setActionBanner] = useState<{ variant: 'success' | 'error'; text: string } | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!course) return;
+    setTitleAr(course.title.ar);
+    setTitleEn(course.title.en);
+    setDescAr(course.shortDescription.ar);
+    setDescEn(course.shortDescription.en);
+    setDisciplineSlug(course.disciplineSlug);
+    setStatus(course.status);
+  }, [
+    course?.slug,
+    course?.status,
+    course?.title.ar,
+    course?.title.en,
+    course?.shortDescription.ar,
+    course?.shortDescription.en,
+    course?.disciplineSlug,
+    course,
+  ]);
 
   if (!course) {
     return (
@@ -68,6 +95,62 @@ export function AdminCourseDetailsPage() {
     setCourseInstructors(course.slug, next);
   };
 
+  const handleExplicitPublish = async () => {
+    const dbId = getCourseDbId(course.slug);
+    setPublishing(true);
+    setActionBanner(null);
+    if (dbId) {
+      const { error } = await adminApproveSubmittedCourse(dbId, true);
+      if (error) {
+        setPublishing(false);
+        setActionBanner({ variant: 'error', text: error });
+        return;
+      }
+      await refreshLiveCatalog();
+    } else {
+      updateCourse(course.slug, { status: 'published', pendingApproval: false });
+    }
+    setStatus('published');
+    setPublishing(false);
+    setActionBanner({
+      variant: 'success',
+      text:
+        locale === 'ar'
+          ? 'تم نشر الدورة ودروسها بنجاح في الكتالوج العام.'
+          : 'Course and its lessons have been published to the public catalog.',
+    });
+  };
+
+  const handleStatusTransition = async (nextStatus: 'draft' | 'archived') => {
+    const dbId = getCourseDbId(course.slug);
+    setPublishing(true);
+    setActionBanner(null);
+    if (dbId) {
+      const { error } = await dbUpdateCourse(dbId, { status: nextStatus });
+      if (error) {
+        setPublishing(false);
+        setActionBanner({ variant: 'error', text: error.message });
+        return;
+      }
+      await refreshLiveCatalog();
+    } else {
+      updateCourse(course.slug, { status: nextStatus });
+    }
+    setStatus(nextStatus);
+    setPublishing(false);
+    setActionBanner({
+      variant: 'success',
+      text:
+        nextStatus === 'archived'
+          ? locale === 'ar'
+            ? 'تمت أرشفة الدورة وإخفاؤها من الكتالوج العام.'
+            : 'Course archived and removed from the public catalog.'
+          : locale === 'ar'
+            ? 'تم إلغاء نشر الدورة ونقلها إلى المسودة.'
+            : 'Course unpublished and moved back to draft.',
+    });
+  };
+
   return (
     <div className="details-stack">
       <StudentPageHeader
@@ -84,6 +167,38 @@ export function AdminCourseDetailsPage() {
               <Badge variant="error">{t('admin.approvals.suspendedBadge')}</Badge>
             ) : null}
             <AdminStatusBadge status={course.status} />
+            {course.status !== 'published' ? (
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={publishing || course.suspended}
+                onClick={() => void handleExplicitPublish()}
+              >
+                <Globe size={14} aria-hidden="true" />{' '}
+                {locale === 'ar' ? 'نشر الدورة في الكتالوج العام' : 'Publish Course'}
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={publishing}
+                onClick={() => void handleStatusTransition('draft')}
+              >
+                <EyeOff size={14} aria-hidden="true" />{' '}
+                {locale === 'ar' ? 'إلغاء النشر (مسودة)' : 'Unpublish'}
+              </Button>
+            )}
+            {course.status !== 'archived' ? (
+              <Button
+                size="sm"
+                variant="tertiary"
+                disabled={publishing}
+                onClick={() => void handleStatusTransition('archived')}
+              >
+                <Archive size={14} aria-hidden="true" />{' '}
+                {locale === 'ar' ? 'أرشفة' : 'Archive'}
+              </Button>
+            ) : null}
             <Button
               size="sm"
               variant={course.suspended ? 'primary' : 'destructive'}
@@ -97,9 +212,28 @@ export function AdminCourseDetailsPage() {
         }
       />
 
+      {actionBanner ? (
+        <Alert
+          variant={actionBanner.variant}
+          title={
+            actionBanner.variant === 'success'
+              ? locale === 'ar'
+                ? 'تم تحديث حالة النشر'
+                : 'Publishing Status Updated'
+              : locale === 'ar'
+                ? 'تعذر تحديث حالة الدورة'
+                : 'Status Update Failed'
+          }
+        >
+          {actionBanner.text}
+        </Alert>
+      ) : null}
+
       {saved ? (
-        <Alert variant="success" title={t('common.demoBadge')}>
-          {t('admin.common.savedDemo')}
+        <Alert variant="success" title={t('admin.common.save')}>
+          {locale === 'ar'
+            ? 'تم حفظ تعديلات الدورة في قاعدة البيانات.'
+            : 'Course changes saved to database.'}
         </Alert>
       ) : null}
 
@@ -183,7 +317,52 @@ export function AdminCourseDetailsPage() {
           </Card>
 
           <Card className="details-stack" style={{ gap: 12 }}>
-            <h2 className="text-h3">{t('admin.courses.curriculumOverviewTitle')}</h2>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <h2 className="text-h3">
+                {locale === 'ar' ? 'التسعير وتعليمات الدفع المباشر' : 'Pricing & Direct Payment Review'}
+              </h2>
+              <Badge variant={course.pricing.enrollmentOpen ? 'success' : 'neutral'}>
+                {course.pricing.enrollmentOpen
+                  ? locale === 'ar'
+                    ? 'التسجيل مفتوح'
+                    : 'Enrollment Open'
+                  : locale === 'ar'
+                    ? 'التسجيل مغلق'
+                    : 'Enrollment Closed'}
+              </Badge>
+            </div>
+            <div className="meta-kv-list">
+              <div className="meta-kv-row">
+                <span>{locale === 'ar' ? 'السعر' : 'Price'}</span>
+                <strong>
+                  {course.pricing.isFree
+                    ? t('admin.paymentStatuses.not_required')
+                    : `${course.pricing.priceAmount.toLocaleString()} ${course.pricing.currency}`}
+                </strong>
+              </div>
+              <div className="meta-kv-row">
+                <span>{locale === 'ar' ? 'طرق الدفع المباشر' : 'Direct Payment Methods'}</span>
+                <span>
+                  {course.pricing.paymentMethods
+                    .map((pm) => t(`admin.paymentMethods.${pm}`))
+                    .join(' · ')}
+                </span>
+              </div>
+              <div className="meta-kv-row">
+                <span>{locale === 'ar' ? 'تعليمات الدفع' : 'Payment Instructions'}</span>
+                <span>{course.pricing.paymentInstructions[locale]}</span>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="details-stack" style={{ gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <h2 className="text-h3">{t('admin.courses.curriculumOverviewTitle')}</h2>
+              <Badge variant="brand">
+                <CheckCircle2 size={13} aria-hidden="true" />{' '}
+                {course.modules.length} {locale === 'ar' ? 'وحدات' : 'modules'}
+              </Badge>
+            </div>
             {course.modules.map((mod) => (
               <div key={mod.id} className="curriculum-module">
                 <div className="curriculum-module__head">
@@ -194,9 +373,52 @@ export function AdminCourseDetailsPage() {
                 </div>
                 <ul className="curriculum-lessons">
                   {mod.lessons.map((lesson) => (
-                    <li key={lesson.id} className="curriculum-lesson">
-                      <span>{lesson.title[locale]}</span>
-                      <AdminStatusBadge status={lesson.status} />
+                    <li
+                      key={lesson.id}
+                      className="curriculum-lesson"
+                      style={{ flexDirection: 'column', alignItems: 'stretch', gap: 6 }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                        <span style={{ fontWeight: 600 }}>{lesson.title[locale]}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Badge variant="neutral">{lesson.lessonType ?? 'video'}</Badge>
+                          <AdminStatusBadge status={lesson.status} />
+                        </div>
+                      </div>
+                      {lesson.videoSourceId || lesson.videoUrl ? (
+                        <div className="text-caption" style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
+                          <Video size={13} aria-hidden="true" />
+                          <span>
+                            {lesson.videoProvider}:{' '}
+                            <bdi className="ltr-inline">{lesson.videoUrl || lesson.videoSourceId}</bdi>
+                          </span>
+                        </div>
+                      ) : null}
+                      {(lesson.lessonResources ?? []).length > 0 ? (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {(lesson.lessonResources ?? []).map((res) => (
+                            <Button
+                              key={res.id}
+                              size="sm"
+                              variant="tertiary"
+                              onClick={async () => {
+                                const target = res.fileNameOrUrl?.trim();
+                                if (target?.startsWith('http://') || target?.startsWith('https://')) {
+                                  window.open(target, '_blank', 'noopener,noreferrer');
+                                  return;
+                                }
+                                if (target?.includes('/')) {
+                                  const { url } = await getSignedResourceUrl(target, 300);
+                                  if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                                }
+                              }}
+                            >
+                              <FileText size={13} aria-hidden="true" /> {res.title[locale]}{' '}
+                              <Download size={12} aria-hidden="true" />
+                            </Button>
+                          ))}
+                        </div>
+                      ) : null}
                     </li>
                   ))}
                 </ul>

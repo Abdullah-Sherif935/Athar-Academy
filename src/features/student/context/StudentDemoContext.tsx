@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -71,6 +72,8 @@ export interface StudentDemoContextValue {
   };
   lessonNotes: Record<string, string>;
   saveLessonNote: (courseSlug: string, lessonId: string, note: string) => void;
+  playbackPositions: Record<string, number>;
+  savePlaybackPosition: (courseSlug: string, lessonId: string, seconds: number) => void;
   posts: CommunityPostItem[];
   addPost: (courseSlug: string, content: string) => void;
   addReply: (postId: string, content: string) => void;
@@ -89,17 +92,48 @@ export interface StudentDemoContextValue {
 const StudentDemoContext = createContext<StudentDemoContextValue | null>(null);
 
 export function StudentDemoProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, profile: authProfile } = useAuth();
   const platform = usePlatformDemo();
 
   const [isDemoActive, setIsDemoActive] = useState<boolean>(readInitialDemoActive);
   const [profile, setProfile] = useState<DemoStudentProfile>(INITIAL_STUDENT_PROFILE);
   const [lessonNotes, setLessonNotes] = useState<Record<string, string>>({});
-  const [posts, setPosts] = useState<CommunityPostItem[]>(INITIAL_COMMUNITY_POSTS);
-  const [conversations, setConversations] = useState<ConversationItem[]>(INITIAL_CONVERSATIONS);
-  const [certificates, setCertificates] = useState<StudentCertificate[]>(INITIAL_CERTIFICATES);
+  const [playbackPositions, setPlaybackPositions] = useState<Record<string, number>>({});
+  const [posts, setPosts] = useState<CommunityPostItem[]>(
+    import.meta.env.DEV ? INITIAL_COMMUNITY_POSTS : [],
+  );
+  const [conversations, setConversations] = useState<ConversationItem[]>(
+    import.meta.env.DEV ? INITIAL_CONVERSATIONS : [],
+  );
+  const [certificates, setCertificates] = useState<StudentCertificate[]>(
+    import.meta.env.DEV ? INITIAL_CERTIFICATES : [],
+  );
   const [notificationPrefs, setNotificationPrefs] =
     useState<StudentNotificationPreferences>(INITIAL_NOTIFICATION_PREFS);
+
+  // Sync real student profile, notes, and playback positions from Supabase when authenticated
+  useEffect(() => {
+    if (!user || !authProfile) return;
+    setProfile((prev) => ({
+      ...prev,
+      fullName: {
+        ar: authProfile.full_name_ar || authProfile.full_name_en || prev.fullName.ar,
+        en: authProfile.full_name_en || authProfile.full_name_ar || prev.fullName.en,
+      },
+      initials: authProfile.initials || prev.initials,
+      email: authProfile.email || user.email || prev.email,
+    }));
+  }, [authProfile, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    setLessonNotes(platform.hydratedLessonNotes);
+  }, [platform.hydratedLessonNotes, user]);
+
+  useEffect(() => {
+    if (!user) return;
+    setPlaybackPositions(platform.hydratedPlaybackPositions);
+  }, [platform.hydratedPlaybackPositions, user]);
 
   const activeEnrolledCourses = useMemo(
     () => platform.studentEnrolledCourses.filter((e) => !e.isSuspended),
@@ -252,6 +286,22 @@ export function StudentDemoProvider({ children }: { children: ReactNode }) {
     [platform, user],
   );
 
+  const savePlaybackPosition = useCallback(
+    (courseSlug: string, lessonId: string, seconds: number) => {
+      const clamped = Math.max(0, Math.round(seconds));
+      setPlaybackPositions((prev) => ({ ...prev, [`${courseSlug}:${lessonId}`]: clamped }));
+      const courseDbId = platform.getCourseDbId(courseSlug);
+      if (user && courseDbId && isUuid(lessonId)) {
+        void rpcUpsertLessonProgress({
+          courseId: courseDbId,
+          lessonId,
+          playbackSeconds: clamped,
+        });
+      }
+    },
+    [platform, user],
+  );
+
   const addPost = useCallback(
     (courseSlug: string, content: string) => {
       const trimmed = content.trim();
@@ -294,19 +344,19 @@ export function StudentDemoProvider({ children }: { children: ReactNode }) {
         prev.map((post) =>
           post.id === postId
             ? {
-                ...post,
-                replies: [
-                  ...post.replies,
-                  {
-                    id: `reply-demo-${Date.now()}`,
-                    authorName: profile.fullName,
-                    authorRole: 'student',
-                    initials: profile.initials,
-                    content: { ar: trimmed, en: trimmed },
-                    timeLabel: { ar: 'الآن (تجريبي)', en: 'Just now (Demo)' },
-                  },
-                ],
-              }
+              ...post,
+              replies: [
+                ...post.replies,
+                {
+                  id: `reply-demo-${Date.now()}`,
+                  authorName: profile.fullName,
+                  authorRole: 'student',
+                  initials: profile.initials,
+                  content: { ar: trimmed, en: trimmed },
+                  timeLabel: { ar: 'الآن (تجريبي)', en: 'Just now (Demo)' },
+                },
+              ],
+            }
             : post,
         ),
       );
@@ -345,18 +395,18 @@ export function StudentDemoProvider({ children }: { children: ReactNode }) {
         prev.map((conv) =>
           conv.id === conversationId
             ? {
-                ...conv,
-                unreadCount: 0,
-                messages: [
-                  ...conv.messages,
-                  {
-                    id: `msg-demo-${Date.now()}`,
-                    sender: 'student',
-                    content: { ar: trimmed, en: trimmed },
-                    timeLabel: { ar: 'الآن (تجريبي)', en: 'Just now (Demo)' },
-                  },
-                ],
-              }
+              ...conv,
+              unreadCount: 0,
+              messages: [
+                ...conv.messages,
+                {
+                  id: `msg-demo-${Date.now()}`,
+                  sender: 'student',
+                  content: { ar: trimmed, en: trimmed },
+                  timeLabel: { ar: 'الآن (تجريبي)', en: 'Just now (Demo)' },
+                },
+              ],
+            }
             : conv,
         ),
       );
@@ -419,6 +469,8 @@ export function StudentDemoProvider({ children }: { children: ReactNode }) {
       getCourseProgress,
       lessonNotes,
       saveLessonNote,
+      playbackPositions,
+      savePlaybackPosition,
       posts,
       addPost,
       addReply,
@@ -455,6 +507,8 @@ export function StudentDemoProvider({ children }: { children: ReactNode }) {
       getCourseProgress,
       lessonNotes,
       saveLessonNote,
+      playbackPositions,
+      savePlaybackPosition,
       posts,
       addPost,
       addReply,

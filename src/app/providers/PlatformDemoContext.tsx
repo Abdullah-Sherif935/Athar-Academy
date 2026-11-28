@@ -44,6 +44,7 @@ import {
   rpcSubmitEnrollment,
   submitDisputeToDb,
 } from '../../services/lmsService';
+import { fetchOperationalSnapshot } from '../../services/enrollmentHydrationService';
 import { useAuth } from './AuthProvider';
 import {
   INITIAL_ACTIVITY_TIMELINE,
@@ -112,6 +113,10 @@ export interface PlatformDemoContextValue {
   getCourseDbId: (courseSlug: string) => string | undefined;
   getDisciplineDbId: (disciplineSlug: string) => string | undefined;
   refreshLiveCatalog: () => Promise<void>;
+  refreshOperationalData: () => Promise<void>;
+  operationalError: string | null;
+  hydratedLessonNotes: Record<string, string>;
+  hydratedPlaybackPositions: Record<string, number>;
   isAdminDemoActive: boolean;
   enterAdminDemo: () => void;
   exitAdminDemo: () => void;
@@ -314,29 +319,99 @@ const PlatformDemoContext = createContext<PlatformDemoContextValue | null>(null)
 export function PlatformDemoProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const courseIdBySlugRef = useRef<Record<string, string>>({});
+  const courseSlugByIdRef = useRef<Record<string, string>>({});
   const disciplineIdBySlugRef = useRef<Record<string, string>>({});
+  const instructorSlugByIdRef = useRef<Record<string, string>>({});
+  const courseLeadSlugBySlugRef = useRef<Record<string, string>>({});
   const getCourseDbId = useCallback((slug: string) => courseIdBySlugRef.current[slug], []);
   const getDisciplineDbId = useCallback((slug: string) => disciplineIdBySlugRef.current[slug], []);
   const [isAdminDemoActive, setIsAdminDemoActive] = useState<boolean>(readInitialAdminActive);
+  const [operationalError, setOperationalError] = useState<string | null>(null);
+  const [hydratedLessonNotes, setHydratedLessonNotes] = useState<Record<string, string>>({});
+  const [hydratedPlaybackPositions, setHydratedPlaybackPositions] = useState<Record<string, number>>(
+    {},
+  );
   const [disciplines, setDisciplines] = useState<PlatformDiscipline[]>(
-    INITIAL_PLATFORM_DISCIPLINES,
+    import.meta.env.DEV ? INITIAL_PLATFORM_DISCIPLINES : [],
   );
   const [instructors, setInstructors] = useState<PlatformInstructor[]>(
-    INITIAL_PLATFORM_INSTRUCTORS,
+    import.meta.env.DEV ? INITIAL_PLATFORM_INSTRUCTORS : [],
   );
-  const [courses, setCourses] = useState<PlatformCourse[]>(INITIAL_PLATFORM_COURSES);
+  const [courses, setCourses] = useState<PlatformCourse[]>(
+    import.meta.env.DEV ? INITIAL_PLATFORM_COURSES : [],
+  );
+  const [courseProposals, setCourseProposals] = useState<CourseProposal[]>([]);
+  const [students, setStudents] = useState<PlatformStudent[]>(
+    import.meta.env.DEV ? INITIAL_PLATFORM_STUDENTS : [],
+  );
+  const [studentEnrolledCourses, setStudentEnrolledCourses] = useState<EnrolledCourseRecord[]>(
+    import.meta.env.DEV ? INITIAL_ENROLLED_COURSES : [],
+  );
+  const [enrollmentRequests, setEnrollmentRequests] = useState<EnrollmentRequestRecord[]>(
+    import.meta.env.DEV ? INITIAL_ENROLLMENT_REQUESTS : [],
+  );
+  const [enrollmentAuditLog, setEnrollmentAuditLog] = useState<EnrollmentAuditEvent[]>(
+    import.meta.env.DEV ? INITIAL_ENROLLMENT_AUDIT_LOG : [],
+  );
+  const [enrollmentDisputes, setEnrollmentDisputes] = useState<EnrollmentDispute[]>([]);
+  const [studentNotifications, setStudentNotifications] = useState<StudentNotification[]>(
+    import.meta.env.DEV ? INITIAL_STUDENT_NOTIFICATIONS : [],
+  );
 
-  // Hydrate live catalog from Supabase PostgreSQL (preserves local fallback if offline/dev)
+  // Hydrate real operational data from Supabase for signed-in users (never falls back to mock arrays)
+  const refreshOperationalData = useCallback(async () => {
+    if (!user) return;
+    const snap = await fetchOperationalSnapshot(
+      user.id,
+      courseSlugByIdRef.current,
+      instructorSlugByIdRef.current,
+      courseLeadSlugBySlugRef.current,
+    );
+    if (snap.error) {
+      setOperationalError(snap.error);
+      return;
+    }
+    setOperationalError(null);
+    setEnrollmentRequests(snap.enrollmentRequests);
+    setStudentEnrolledCourses(snap.studentEnrolledCourses);
+    setHydratedLessonNotes(snap.lessonNotes);
+    setHydratedPlaybackPositions(snap.playbackPositions);
+    setStudentNotifications(snap.studentNotifications);
+    setEnrollmentAuditLog(snap.enrollmentAuditLog);
+    setEnrollmentDisputes(snap.enrollmentDisputes);
+    setStudents(snap.students);
+  }, [user]);
+
+  // Hydrate live catalog from Supabase PostgreSQL (preserves local fallback only in offline DEV)
   const refreshLiveCatalog = useCallback(async () => {
     const snapshot = await fetchLiveCatalog();
     if (!snapshot) return;
     courseIdBySlugRef.current = snapshot.courseIdBySlug;
+    courseSlugByIdRef.current = snapshot.courseSlugById;
     disciplineIdBySlugRef.current = snapshot.disciplineIdBySlug;
+    instructorSlugByIdRef.current = snapshot.instructorSlugById;
+    const leadMap: Record<string, string> = {};
+    snapshot.courses.forEach((c) => {
+      if (c.leadInstructorSlug) leadMap[c.slug] = c.leadInstructorSlug;
+    });
+    courseLeadSlugBySlugRef.current = leadMap;
+
     if (snapshot.disciplines.length > 0) {
       setDisciplines(snapshot.disciplines);
     }
+    if (snapshot.instructors.length > 0) {
+      if (import.meta.env.DEV && !user) {
+        const liveInstSlugs = new Set(snapshot.instructors.map((i) => i.slug));
+        setInstructors([
+          ...snapshot.instructors,
+          ...INITIAL_PLATFORM_INSTRUCTORS.filter((i) => !liveInstSlugs.has(i.slug)),
+        ]);
+      } else {
+        setInstructors(snapshot.instructors);
+      }
+    }
     if (snapshot.courses.length > 0) {
-      if (import.meta.env.DEV) {
+      if (import.meta.env.DEV && !user) {
         const liveSlugs = new Set(snapshot.courses.map((c) => c.slug));
         setCourses([
           ...snapshot.courses,
@@ -346,25 +421,30 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         setCourses(snapshot.courses);
       }
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
-    void refreshLiveCatalog();
-  }, [refreshLiveCatalog, user?.id]);
-  const [courseProposals, setCourseProposals] = useState<CourseProposal[]>([]);
-  const [students, setStudents] = useState<PlatformStudent[]>(INITIAL_PLATFORM_STUDENTS);
-  const [studentEnrolledCourses, setStudentEnrolledCourses] =
-    useState<EnrolledCourseRecord[]>(INITIAL_ENROLLED_COURSES);
-  const [enrollmentRequests, setEnrollmentRequests] = useState<EnrollmentRequestRecord[]>(
-    INITIAL_ENROLLMENT_REQUESTS,
-  );
-  const [enrollmentAuditLog, setEnrollmentAuditLog] = useState<EnrollmentAuditEvent[]>(
-    INITIAL_ENROLLMENT_AUDIT_LOG,
-  );
-  const [enrollmentDisputes, setEnrollmentDisputes] = useState<EnrollmentDispute[]>([]);
-  const [studentNotifications, setStudentNotifications] = useState<StudentNotification[]>(
-    INITIAL_STUDENT_NOTIFICATIONS,
-  );
+    let active = true;
+    void (async () => {
+      await refreshLiveCatalog();
+      if (!active) return;
+      if (user) {
+        await refreshOperationalData();
+      } else if (!import.meta.env.DEV) {
+        setEnrollmentRequests([]);
+        setStudentEnrolledCourses([]);
+        setHydratedLessonNotes({});
+        setHydratedPlaybackPositions({});
+        setStudentNotifications([]);
+        setEnrollmentAuditLog([]);
+        setEnrollmentDisputes([]);
+        setStudents([]);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [refreshLiveCatalog, refreshOperationalData, user]);
   const [approvalHistory, setApprovalHistory] =
     useState<ApprovalHistoryItem[]>(INITIAL_APPROVAL_HISTORY);
   const [reviews, setReviews] = useState<PlatformReview[]>(INITIAL_PLATFORM_REVIEWS);
@@ -1762,7 +1842,7 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
 
       const newReq: EnrollmentRequestRecord = {
         id: `req-demo-${Date.now()}`,
-        studentId: 'stu-sara',
+        studentId: user?.id ?? 'stu-sara',
         courseSlug,
         leadInstructorSlug,
         status: 'pending',
@@ -1771,7 +1851,7 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         currency,
         isFreeSnapshot,
         studentMessage: studentMessage?.trim() || undefined,
-        requestedAt: { ar: 'الآن (طلب محلي تجريبي)', en: 'Just now (Local Demo Request)' },
+        requestedAt: { ar: 'الآن', en: 'Just now' },
         updatedAt: { ar: 'الآن', en: 'Just now' },
       };
 
@@ -1785,7 +1865,7 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
       appendAudit(
         newReq.id,
         'request_created',
-        'stu-sara',
+        user?.id ?? 'stu-sara',
         'student',
         'pending',
         undefined,
@@ -1808,12 +1888,24 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
       if (user) {
         const dbCourseId = courseIdBySlugRef.current[courseSlug];
         if (dbCourseId) {
-          void rpcSubmitEnrollment(dbCourseId, studentMessage);
+          void rpcSubmitEnrollment(dbCourseId, studentMessage).then(({ error }) => {
+            if (error) setOperationalError(error.message);
+            void refreshOperationalData();
+          });
         }
       }
       return { ok: true };
     },
-    [appendAudit, courses, enrollmentRequests, pushActivity, pushStudentNotification, studentEnrolledCourses, user],
+    [
+      appendAudit,
+      courses,
+      enrollmentRequests,
+      pushActivity,
+      pushStudentNotification,
+      refreshOperationalData,
+      studentEnrolledCourses,
+      user,
+    ],
   );
 
   const grantStudentAccessOnce = useCallback(
@@ -1920,11 +2012,22 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         '/student/enrollment-requests',
       );
       if (user && /^[0-9a-f-]{36}$/i.test(requestId)) {
-        void rpcAcceptEnrollment(requestId);
+        void rpcAcceptEnrollment(requestId).then(({ error }) => {
+          if (error) setOperationalError(error.message);
+          void refreshOperationalData();
+        });
       }
       return { ok: true };
     },
-    [appendAudit, courses, enrollmentRequests, grantStudentAccessOnce, pushStudentNotification, user],
+    [
+      appendAudit,
+      courses,
+      enrollmentRequests,
+      grantStudentAccessOnce,
+      pushStudentNotification,
+      refreshOperationalData,
+      user,
+    ],
   );
 
   const confirmDirectPaymentAndActivate = useCallback(
@@ -2006,7 +2109,10 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         `Instructor confirmed payment (${target.priceSnapshot} ${target.currency}) and activated "${course?.title.en ?? target.courseSlug}"`,
       );
       if (user && /^[0-9a-f-]{36}$/i.test(requestId)) {
-        void rpcConfirmDirectPayment(requestId);
+        void rpcConfirmDirectPayment(requestId).then(({ error }) => {
+          if (error) setOperationalError(error.message);
+          void refreshOperationalData();
+        });
       }
       return { ok: true };
     },
@@ -2019,6 +2125,7 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
       instructors,
       pushActivity,
       pushStudentNotification,
+      refreshOperationalData,
       user,
     ],
   );
@@ -2098,10 +2205,13 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         '/student/enrollment-requests',
       );
       if (user && /^[0-9a-f-]{36}$/i.test(requestId)) {
-        void rpcRejectEnrollment(requestId, trimmed);
+        void rpcRejectEnrollment(requestId, trimmed).then(({ error }) => {
+          if (error) setOperationalError(error.message);
+          void refreshOperationalData();
+        });
       }
     },
-    [appendAudit, courses, enrollmentRequests, pushStudentNotification, user],
+    [appendAudit, courses, enrollmentRequests, pushStudentNotification, refreshOperationalData, user],
   );
 
   const cancelEnrollmentRequest = useCallback(
@@ -2164,10 +2274,13 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         '/student/enrollment-requests',
       );
       if (user && /^[0-9a-f-]{36}$/i.test(requestId)) {
-        void rpcAdminSuspendEnrollment(requestId, trimmed);
+        void rpcAdminSuspendEnrollment(requestId, trimmed).then(({ error }) => {
+          if (error) setOperationalError(error.message);
+          void refreshOperationalData();
+        });
       }
     },
-    [appendAudit, courses, enrollmentRequests, pushStudentNotification, user],
+    [appendAudit, courses, enrollmentRequests, pushStudentNotification, refreshOperationalData, user],
   );
 
   const reactivateEnrollment = useCallback(
@@ -2198,10 +2311,21 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         `/student/courses/${target.courseSlug}`,
       );
       if (user && /^[0-9a-f-]{36}$/i.test(requestId)) {
-        void rpcAdminReactivateEnrollment(requestId, trimmed);
+        void rpcAdminReactivateEnrollment(requestId, trimmed).then(({ error }) => {
+          if (error) setOperationalError(error.message);
+          void refreshOperationalData();
+        });
       }
     },
-    [appendAudit, courses, enrollmentRequests, grantStudentAccessOnce, pushStudentNotification, user],
+    [
+      appendAudit,
+      courses,
+      enrollmentRequests,
+      grantStudentAccessOnce,
+      pushStudentNotification,
+      refreshOperationalData,
+      user,
+    ],
   );
 
   const adminOverrideEnrollmentStatus = useCallback(
@@ -2624,6 +2748,10 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
       getCourseDbId,
       getDisciplineDbId,
       refreshLiveCatalog,
+      refreshOperationalData,
+      operationalError,
+      hydratedLessonNotes,
+      hydratedPlaybackPositions,
       isAdminDemoActive,
       enterAdminDemo,
       exitAdminDemo,
@@ -2707,6 +2835,10 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
       getCourseDbId,
       getDisciplineDbId,
       refreshLiveCatalog,
+      refreshOperationalData,
+      operationalError,
+      hydratedLessonNotes,
+      hydratedPlaybackPositions,
       isAdminDemoActive,
       enterAdminDemo,
       exitAdminDemo,
