@@ -38,22 +38,21 @@ export function AdminEnrollmentsPage() {
   const [suspendOnResolve, setSuspendOnResolve] = useState(false);
   const [refundConfirmed, setRefundConfirmed] = useState(false);
 
-  const demoStudent = students.find((s) => s.id === 'stu-sara');
-
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return enrollmentRequests.filter((req) => {
       if (statusFilter !== 'all' && req.status !== statusFilter) return false;
       if (!q) return true;
       const course = courses.find((c) => c.slug === req.courseSlug);
-      const studentName = `${demoStudent?.fullName.ar ?? ''} ${demoStudent?.fullName.en ?? ''}`.toLowerCase();
+      const reqStudent = students.find((s) => s.id === req.studentId);
+      const studentName = `${reqStudent?.fullName.ar ?? ''} ${reqStudent?.fullName.en ?? ''} ${reqStudent?.email ?? ''}`.toLowerCase();
       return (
         studentName.includes(q) ||
         (course?.title.ar.toLowerCase().includes(q) ?? false) ||
         (course?.title.en.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [courses, demoStudent, enrollmentRequests, query, statusFilter]);
+  }, [courses, enrollmentRequests, query, statusFilter, students]);
 
   const handleConfirmReject = () => {
     if (!rejectingId) return;
@@ -145,13 +144,16 @@ export function AdminEnrollmentsPage() {
               {filtered.map((req) => {
                 const course = courses.find((c) => c.slug === req.courseSlug);
                 const leadInst = instructors.find((i) => i.slug === req.leadInstructorSlug);
+                const reqStudent = students.find((s) => s.id === req.studentId);
                 const isActive = req.status === 'active' || req.status === 'approved';
                 return (
                   <tr key={req.id}>
                     <td>
-                      <div style={{ fontWeight: 700 }}>{demoStudent?.fullName[locale] ?? 'Sara Al-Ali'}</div>
+                      <div style={{ fontWeight: 700 }}>
+                        {reqStudent?.fullName[locale] ?? req.studentId}
+                      </div>
                       <div className="text-caption" style={{ color: 'var(--text-secondary)' }}>
-                        <bdi className="ltr-inline">{demoStudent?.email}</bdi>
+                        <bdi className="ltr-inline">{reqStudent?.email ?? ''}</bdi>
                       </div>
                     </td>
                     <td>
