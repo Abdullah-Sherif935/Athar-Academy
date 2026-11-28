@@ -191,6 +191,29 @@ export function CoursePreviewPage() {
           </Card>
 
           <Card className="details-stack" style={{ gap: 8 }}>
+            <h2 className="text-h3">
+              {locale === 'ar' ? 'التسعير وتعليمات الدفع المباشر' : 'Pricing & Direct Payment'}
+            </h2>
+            <div className="text-h3" style={{ color: 'var(--brand-blue)' }}>
+              {course.pricing.isFree
+                ? locale === 'ar'
+                  ? 'مجانية'
+                  : 'Free'
+                : `${course.pricing.priceAmount.toLocaleString()} ${course.pricing.currency}`}
+            </div>
+            <p className="text-small" style={{ color: 'var(--text-secondary)' }}>
+              {course.pricing.paymentInstructions[locale]}
+            </p>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {course.pricing.paymentMethods.map((pm) => (
+                <Badge key={pm} variant="neutral">
+                  {pm}
+                </Badge>
+              ))}
+            </div>
+          </Card>
+
+          <Card className="details-stack" style={{ gap: 8 }}>
             <h2 className="text-h3">{t('instructor.courses.assignedInstructors')}</h2>
             {courseInstructors.map((inst) => (
               <div key={inst.slug} className="text-small" style={{ fontWeight: 600 }}>

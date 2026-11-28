@@ -64,6 +64,7 @@ function readInitialActive(): boolean {
 }
 
 export interface InstructorDemoContextValue {
+  refreshInstructorData: () => Promise<void>;
   isDemoActive: boolean;
   enterDemoMode: () => void;
   exitDemoMode: () => void;
@@ -197,33 +198,36 @@ export function InstructorDemoProvider({ children }: { children: ReactNode }) {
   const [notificationPrefs, setNotificationPrefs] =
     useState<InstructorNotificationPreferences>(INITIAL_INSTRUCTOR_PREFS);
 
+  const { refreshLiveCatalog } = platform;
+
   // Hydrate real instructor profile and assigned courses from Supabase when signed in
-  useEffect(() => {
+  const refreshInstructorData = useCallback(async () => {
     if (!user) {
       setRealAssignedSlugs(null);
       return;
     }
-    let active = true;
-    void fetchOwnInstructorPortalData(user.id).then((res) => {
-      if (!active) return;
-      setRealAssignedSlugs(res.assignedCourseSlugs);
-      if (res.instructorProfile) {
-        const ip = res.instructorProfile;
-        setProfile((prev) => ({
-          ...prev,
-          slug: ip.slug,
-          fullName: ip.fullName,
-          initials: ip.initials,
-          title: ip.title,
-          biography: ip.biography,
-          expertise: ip.expertise,
-        }));
-      }
-    });
-    return () => {
-      active = false;
-    };
-  }, [user]);
+    const [res] = await Promise.all([
+      fetchOwnInstructorPortalData(user.id),
+      refreshLiveCatalog(),
+    ]);
+    setRealAssignedSlugs(res.assignedCourseSlugs);
+    if (res.instructorProfile) {
+      const ip = res.instructorProfile;
+      setProfile((prev) => ({
+        ...prev,
+        slug: ip.slug,
+        fullName: ip.fullName,
+        initials: ip.initials,
+        title: ip.title,
+        biography: ip.biography,
+        expertise: ip.expertise,
+      }));
+    }
+  }, [refreshLiveCatalog, user]);
+
+  useEffect(() => {
+    void refreshInstructorData();
+  }, [refreshInstructorData]);
 
   const platformInstructor = platform.instructors.find((i) => i.slug === DEMO_INSTRUCTOR_SLUG);
   const isInstructorDisabled = user
@@ -695,6 +699,7 @@ export function InstructorDemoProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<InstructorDemoContextValue>(
     () => ({
+      refreshInstructorData,
       isDemoActive,
       enterDemoMode,
       exitDemoMode,
@@ -750,6 +755,7 @@ export function InstructorDemoProvider({ children }: { children: ReactNode }) {
       updateNotificationPref,
     }),
     [
+      refreshInstructorData,
       isDemoActive,
       enterDemoMode,
       exitDemoMode,

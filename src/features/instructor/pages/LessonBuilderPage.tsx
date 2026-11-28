@@ -9,10 +9,13 @@ import {
   Save,
   ShieldAlert,
   Trash2,
+  Upload,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useAuth } from '../../../app/providers/AuthProvider';
 import { useI18n } from '../../../app/providers/I18nProvider';
+import { usePlatformDemo } from '../../../app/providers/PlatformDemoContext';
 import { YouTubeVideoPreview } from '../../../components/shared/YouTubeVideoPreview';
 import {
   Alert,
@@ -27,6 +30,10 @@ import {
 } from '../../../components/ui';
 import type { LessonResourceItem, LessonResourceType, LessonType } from '../../../data/mock/admin';
 import type { VideoProviderType } from '../../../data/mock/instructor';
+import {
+  deleteLessonResourceFromDb,
+  uploadAndAttachLessonResource,
+} from '../../../services/courseWorkflowService';
 import { parseYouTubeUrl } from '../../../utils/youtube';
 import { StudentPageHeader } from '../../student/components/StudentPageHeader';
 import { LessonStatusBadge } from '../components/LessonStatusBadge';
@@ -42,8 +49,11 @@ const PROVIDERS: VideoProviderType[] = [
 export function LessonBuilderPage() {
   const { courseId = '', lessonId = '' } = useParams();
   const { t, locale } = useI18n();
+  const { user } = useAuth();
+  const { getCourseDbId, refreshLiveCatalog } = usePlatformDemo();
   const { getAssignedCourse, isInstructorDisabled, saveLessonChanges, requireLessonApproval } =
     useInstructorDemo();
+  const isAr = locale === 'ar';
 
   const course = getAssignedCourse(courseId);
   const foundLesson = course?.modules.flatMap((m) => m.lessons).find((l) => l.id === lessonId);
@@ -67,16 +77,34 @@ export function LessonBuilderPage() {
     editorSource?.lessonResources ?? [],
   );
 
-  // New resource draft inputs
+  // New resource draft inputs (supports both real private Storage file upload & external links)
   const [resTitle, setResTitle] = useState('');
   const [resDesc, setResDesc] = useState('');
   const [resType, setResType] = useState<LessonResourceType>('pdf');
   const [resFile, setResFile] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadingRes, setUploadingRes] = useState(false);
+  const [resourceError, setResourceError] = useState<string | null>(null);
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [hasUnsaved, setHasUnsaved] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!editorSource) return;
+    setTitle(editorSource.title[locale] ?? '');
+    setShortDesc(editorSource.shortDescription?.[locale] ?? '');
+    setDesc(editorSource.description[locale] ?? '');
+    setLessonType(editorSource.lessonType ?? 'video');
+    setProvider(editorSource.videoProvider ?? 'youtube_unlisted');
+    setYoutubeUrl(editorSource.videoUrl ?? '');
+    setSourceId(editorSource.videoSourceId ?? '');
+    setDuration(String(editorSource.durationMinutes ?? 15));
+    setMaterials(editorSource.materialsNote[locale] ?? '');
+    setIsPreview(Boolean(editorSource.isPreview));
+    setResources(editorSource.lessonResources ?? []);
+  }, [editorSource?.videoSourceId, foundLesson?.id, locale]);
 
   if (isInstructorDisabled) {
     return (
@@ -118,11 +146,42 @@ export function LessonBuilderPage() {
     }
   };
 
-  const handleAddResource = () => {
-    if (!resTitle.trim() || !resFile.trim()) return;
+  const handleAddResource = async () => {
+    setResourceError(null);
+    const titleVal = resTitle.trim() || selectedFile?.name || '';
+    if (!titleVal) return;
+
+    const courseDbId = getCourseDbId(course.slug);
+    if (user && courseDbId) {
+      setUploadingRes(true);
+      const { item, error: upErr } = await uploadAndAttachLessonResource({
+        courseId: courseDbId,
+        lessonId: foundLesson.id,
+        title: titleVal,
+        description: resDesc.trim(),
+        resourceType: resType,
+        file: resType !== 'link' ? (selectedFile ?? undefined) : undefined,
+        externalUrl: resType === 'link' || !selectedFile ? resFile.trim() : undefined,
+        sortOrder: resources.length,
+      });
+      setUploadingRes(false);
+      if (upErr || !item) {
+        setResourceError(upErr || (isAr ? 'تعذر رفع المرفق.' : 'Failed to upload resource.'));
+        return;
+      }
+      setResources((prev) => [...prev, item]);
+      setResTitle('');
+      setResDesc('');
+      setResFile('');
+      setSelectedFile(null);
+      await refreshLiveCatalog();
+      return;
+    }
+
+    if (!resFile.trim()) return;
     const item: LessonResourceItem = {
       id: `lres-${Date.now()}`,
-      title: { ar: resTitle.trim(), en: resTitle.trim() },
+      title: { ar: titleVal, en: titleVal },
       description: { ar: resDesc.trim(), en: resDesc.trim() },
       type: resType,
       fileNameOrUrl: resFile.trim(),
@@ -393,12 +452,10 @@ export function LessonBuilderPage() {
         </label>
       </Card>
 
-      {/* Learning Resources Manager */}
+      {/* Learning Resources Manager (Real Private Supabase Storage Upload + External Links) */}
       <Card className="details-stack" style={{ gap: 12 }}>
         <h2 className="text-h3">{t('instructor.selfService.lessonEditor.resourcesTitle')}</h2>
-        <Alert variant="info" title={t('common.demoBadge')}>
-          {t('instructor.selfService.lessonEditor.resourcesNotice')}
-        </Alert>
+        {resourceError ? <Alert variant="error" title={resourceError} /> : null}
 
         {resources.length > 0 ? (
           <div className="details-stack" style={{ gap: 8 }}>
@@ -451,7 +508,8 @@ export function LessonBuilderPage() {
                   <Button
                     size="sm"
                     variant="destructive"
-                    onClick={() => {
+                    onClick={async () => {
+                      await deleteLessonResourceFromDb(res.id);
                       setResources((prev) => prev.filter((r) => r.id !== res.id));
                       setHasUnsaved(true);
                     }}
@@ -481,11 +539,29 @@ export function LessonBuilderPage() {
             <option value="spreadsheet">{t('instructor.selfService.lessonEditor.resTypes.spreadsheet')}</option>
             <option value="link">{t('instructor.selfService.lessonEditor.resTypes.link')}</option>
           </Select>
-          <Input
-            placeholder={t('instructor.selfService.lessonEditor.resFilePlaceholder')}
-            value={resFile}
-            onChange={(e) => setResFile(e.target.value)}
-          />
+          {resType === 'link' ? (
+            <Input
+              placeholder="https://example.com/resource"
+              dir="ltr"
+              value={resFile}
+              onChange={(e) => setResFile(e.target.value)}
+            />
+          ) : (
+            <div className="ui-field">
+              <input
+                type="file"
+                aria-label={isAr ? 'اختر ملف المرفق' : 'Choose resource file'}
+                accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,.png,.jpg,.jpeg"
+                onChange={(e) => {
+                  const f = e.target.files?.[0] ?? null;
+                  setSelectedFile(f);
+                  if (f && !resTitle.trim()) {
+                    setResTitle(f.name.replace(/\.[^.]+$/, ''));
+                  }
+                }}
+              />
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <div style={{ flex: 1, minWidth: 200 }}>
@@ -499,10 +575,19 @@ export function LessonBuilderPage() {
             type="button"
             variant="secondary"
             size="sm"
-            disabled={!resTitle.trim() || !resFile.trim()}
-            onClick={handleAddResource}
+            disabled={
+              uploadingRes ||
+              (!resTitle.trim() && !selectedFile) ||
+              (resType === 'link' ? !resFile.trim() : !selectedFile && !resFile.trim())
+            }
+            onClick={() => void handleAddResource()}
           >
-            <Plus size={14} aria-hidden="true" /> {t('instructor.selfService.lessonEditor.addResourceBtn')}
+            {selectedFile ? <Upload size={14} aria-hidden="true" /> : <Plus size={14} aria-hidden="true" />}{' '}
+            {uploadingRes
+              ? isAr
+                ? 'جارٍ الرفع...'
+                : 'Uploading...'
+              : t('instructor.selfService.lessonEditor.addResourceBtn')}
           </Button>
         </div>
       </Card>

@@ -16,6 +16,7 @@ import { useI18n } from '../../../app/providers/I18nProvider';
 import { usePlatformDemo } from '../../../app/providers/PlatformDemoContext';
 import { DisciplineIcon } from '../../../components/shared';
 import { Alert, Badge, Button, Card, EmptyState } from '../../../components/ui';
+import { instructorSubmitCourseForReview } from '../../../services/courseWorkflowService';
 import { StudentPageHeader } from '../../student/components/StudentPageHeader';
 import { LessonStatusBadge } from '../components/LessonStatusBadge';
 import { useInstructorDemo } from '../context/InstructorDemoContext';
@@ -25,7 +26,7 @@ type WorkspaceTab = 'overview' | 'info' | 'curriculum' | 'resources' | 'submissi
 export function InstructorCourseManagementPage() {
   const { courseId = '' } = useParams();
   const { t, locale } = useI18n();
-  const { disciplines, instructors } = usePlatformDemo();
+  const { disciplines, instructors, getCourseDbId, refreshLiveCatalog } = usePlatformDemo();
   const {
     getAssignedCourse,
     isInstructorDisabled,
@@ -35,6 +36,8 @@ export function InstructorCourseManagementPage() {
 
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('overview');
   const [submittedMsg, setSubmittedMsg] = useState(false);
+  const [submitBusy, setSubmitBusy] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   if (isInstructorDisabled) {
     return (
@@ -307,6 +310,7 @@ export function InstructorCourseManagementPage() {
                   {t('instructor.selfService.workspace.submittedForReviewNote')}
                 </Alert>
               ) : null}
+              {submitError ? <Alert variant="error" title={submitError} /> : null}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                 <Link
                   to={`/instructor/courses/${course.slug}/preview`}
@@ -317,14 +321,32 @@ export function InstructorCourseManagementPage() {
                 </Link>
                 <Button
                   variant="primary"
-                  disabled={Boolean(course.suspended) || Boolean(course.pendingApproval)}
-                  onClick={() => {
+                  disabled={
+                    submitBusy || Boolean(course.suspended) || Boolean(course.pendingApproval)
+                  }
+                  onClick={async () => {
+                    setSubmitError(null);
+                    const courseDbId = getCourseDbId(course.slug);
+                    if (courseDbId) {
+                      setSubmitBusy(true);
+                      const { error: subErr } = await instructorSubmitCourseForReview(courseDbId);
+                      setSubmitBusy(false);
+                      if (subErr) {
+                        setSubmitError(subErr);
+                        return;
+                      }
+                      await refreshLiveCatalog();
+                    }
                     submitCourseForReview(course.slug);
                     setSubmittedMsg(true);
                   }}
                 >
                   <Send size={15} aria-hidden="true" />{' '}
-                  {t('instructor.selfService.workspace.submitForReviewBtn')}
+                  {submitBusy
+                    ? locale === 'ar'
+                      ? 'جارٍ الإرسال...'
+                      : 'Submitting...'
+                    : t('instructor.selfService.workspace.submitForReviewBtn')}
                 </Button>
               </div>
             </Card>

@@ -203,10 +203,19 @@ export async function fetchLiveCatalog(): Promise<LiveCatalogSnapshot | null> {
       accent: c.accent ?? 'blue',
       featured: Boolean(c.featured),
       status:
-        c.status === 'published' ? 'published' : c.status === 'archived' ? 'archived' : 'draft',
+        c.status === 'published'
+          ? 'published'
+          : c.status === 'archived'
+            ? 'archived'
+            : 'draft',
       pendingApproval: c.status === 'pending_approval',
       suspended: Boolean(c.is_suspended),
-      lastUpdated: { ar: 'متزامن مع قاعدة البيانات', en: 'Synced with Database' },
+      lastUpdated:
+        c.status === 'approved'
+          ? { ar: 'معتمدة من الإدارة (جاهزة للنشر)', en: 'Approved by Admin (Ready to Publish)' }
+          : c.status === 'rejected'
+            ? { ar: 'مُعادة للتعديل من الإدارة', en: 'Returned for Revision by Admin' }
+            : { ar: 'متزامن مع قاعدة البيانات', en: 'Synced with Database' },
       whatYouWillLearn: Array.isArray(c.what_you_will_learn) ? c.what_you_will_learn : [],
       objectives: Array.isArray(c.objectives) ? c.objectives : [],
       requirements: Array.isArray(c.requirements) ? c.requirements : [],

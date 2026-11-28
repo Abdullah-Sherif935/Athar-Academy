@@ -1,53 +1,68 @@
-import { ArrowLeft, ArrowRight, Send, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, ArrowRight, BookPlus, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useI18n } from '../../../app/providers/I18nProvider';
 import { usePlatformDemo } from '../../../app/providers/PlatformDemoContext';
 import { Alert, Button, Card, Input, Select, Textarea } from '../../../components/ui';
-import type { CourseLanguage } from '../../../data/mock/admin';
+import type { CourseCurrency, CourseLanguage, PaymentMethodType } from '../../../data/mock/admin';
 import type { CourseLevel } from '../../../data/mock/types';
+import { instructorCreateDraftCourse } from '../../../services/courseWorkflowService';
 import { StudentPageHeader } from '../../student/components/StudentPageHeader';
 import { useInstructorDemo } from '../context/InstructorDemoContext';
+
+const ALL_PAYMENT_METHODS: Array<{ id: PaymentMethodType; ar: string; en: string }> = [
+  { id: 'vodafone_cash', ar: 'فودافون كاش', en: 'Vodafone Cash' },
+  { id: 'instapay', ar: 'إنستاباي (InstaPay)', en: 'InstaPay' },
+  { id: 'bank_transfer', ar: 'تحويل بنكي', en: 'Bank Transfer' },
+  { id: 'cash_in_person', ar: 'دفع نقدي مباشر', en: 'Cash in Person' },
+];
 
 export function CourseProposalPage() {
   const { t, locale, dir } = useI18n();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const editProposalId = searchParams.get('proposalId');
+  const isAr = locale === 'ar';
 
-  const { disciplines } = usePlatformDemo();
-  const { isInstructorDisabled, myProposals, createProposal, updateProposal, submitProposal } =
-    useInstructorDemo();
+  const { disciplines, getDisciplineDbId } = usePlatformDemo();
+  const { isInstructorDisabled, refreshInstructorData } = useInstructorDemo();
 
-  const existing = editProposalId ? myProposals.find((p) => p.id === editProposalId) : undefined;
-
-  const [titleAr, setTitleAr] = useState(existing?.title.ar ?? '');
-  const [titleEn, setTitleEn] = useState(existing?.title.en ?? '');
-  const [shortDescAr, setShortDescAr] = useState(existing?.shortDescription.ar ?? '');
-  const [shortDescEn, setShortDescEn] = useState(existing?.shortDescription.en ?? '');
-  const [fullDescAr, setFullDescAr] = useState(existing?.fullDescription.ar ?? '');
-  const [fullDescEn, setFullDescEn] = useState(existing?.fullDescription.en ?? '');
+  // Basic Information
+  const [titleAr, setTitleAr] = useState('');
+  const [titleEn, setTitleEn] = useState('');
+  const [shortDescAr, setShortDescAr] = useState('');
+  const [shortDescEn, setShortDescEn] = useState('');
+  const [fullDescAr, setFullDescAr] = useState('');
+  const [fullDescEn, setFullDescEn] = useState('');
   const [disciplineSlug, setDisciplineSlug] = useState(
-    existing?.disciplineSlug ?? disciplines[0]?.slug ?? 'software-technology',
+    disciplines[0]?.slug ?? 'software-technology',
   );
-  const [level, setLevel] = useState<CourseLevel>(existing?.level ?? 'beginner');
-  const [language, setLanguage] = useState<CourseLanguage>(existing?.language ?? 'bilingual');
-  const [thumbnailUrl, setThumbnailUrl] = useState(existing?.thumbnailUrl ?? '');
-  const [durationAr, setDurationAr] = useState(existing?.duration.ar ?? '6 أسابيع');
-  const [durationEn, setDurationEn] = useState(existing?.duration.en ?? '6 Weeks');
-  const [suggestedPrice, setSuggestedPrice] = useState(existing?.suggestedPrice[locale] ?? 'Free (Demo)');
-  const [enrollmentNotes, setEnrollmentNotes] = useState(existing?.enrollmentNotes[locale] ?? '');
-  const [outcomesText, setOutcomesText] = useState(
-    existing?.whatYouWillLearn.map((x) => x[locale]).join('\n') ?? '',
+  const [level, setLevel] = useState<CourseLevel>('beginner');
+  const [language, setLanguage] = useState<CourseLanguage>('bilingual');
+  const [thumbnailUrl, setThumbnailUrl] = useState('');
+  const [durationAr, setDurationAr] = useState('6 أسابيع');
+  const [durationEn, setDurationEn] = useState('6 Weeks');
+  const [outcomesText, setOutcomesText] = useState('');
+  const [requirementsText, setRequirementsText] = useState('');
+  const [audienceText, setAudienceText] = useState('');
+
+  // Pricing & Direct-to-Instructor Enrollment
+  const [isFree, setIsFree] = useState(false);
+  const [priceAmount, setPriceAmount] = useState('1500');
+  const [currency, setCurrency] = useState<CourseCurrency>('EGP');
+  const [enrollmentOpen, setEnrollmentOpen] = useState(true);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodType[]>([
+    'vodafone_cash',
+    'instapay',
+    'bank_transfer',
+  ]);
+  const [payInstAr, setPayInstAr] = useState(
+    'تواصل مع المدرب الرئيسي لتنسيق الدفع المباشر خارج المنصة.',
   );
-  const [requirementsText, setRequirementsText] = useState(
-    existing?.requirements.map((x) => x[locale]).join('\n') ?? '',
+  const [payInstEn, setPayInstEn] = useState(
+    'Contact the Lead Instructor to coordinate direct payment outside the platform.',
   );
-  const [audienceText, setAudienceText] = useState(
-    existing?.targetAudience.map((x) => x[locale]).join('\n') ?? '',
-  );
+
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<string | null>(null);
 
   if (isInstructorDisabled) {
     return (
@@ -67,48 +82,66 @@ export function CourseProposalPage() {
       .filter(Boolean)
       .map((l) => ({ ar: l, en: l }));
 
-  const handleSave = (submitImmediately: boolean) => {
+  const toggleMethod = (m: PaymentMethodType) => {
+    setPaymentMethods((prev) => (prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]));
+  };
+
+  const handleCreateDraft = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
     if (!titleAr.trim() || !titleEn.trim() || !shortDescAr.trim() || !shortDescEn.trim()) {
       setError(t('instructor.selfService.proposal.validationError'));
-      setFeedback(null);
       return;
     }
 
-    const payload = {
-      title: { ar: titleAr.trim(), en: titleEn.trim() },
-      shortDescription: { ar: shortDescAr.trim(), en: shortDescEn.trim() },
-      fullDescription: {
-        ar: fullDescAr.trim() || shortDescAr.trim(),
-        en: fullDescEn.trim() || shortDescEn.trim(),
-      },
-      disciplineSlug,
-      level,
-      language,
-      thumbnailUrl: thumbnailUrl.trim() || undefined,
-      duration: { ar: durationAr.trim() || '6 أسابيع', en: durationEn.trim() || '6 Weeks' },
-      suggestedPrice: { ar: suggestedPrice.trim(), en: suggestedPrice.trim() },
-      enrollmentNotes: { ar: enrollmentNotes.trim(), en: enrollmentNotes.trim() },
-      whatYouWillLearn: toLines(outcomesText),
-      requirements: toLines(requirementsText),
-      targetAudience: toLines(audienceText),
-    };
-
-    if (existing) {
-      updateProposal(existing.id, payload);
-      if (submitImmediately) {
-        submitProposal(existing.id);
-      }
-    } else {
-      createProposal({ ...payload, submitImmediately });
+    const disciplineId = getDisciplineDbId(disciplineSlug) ?? getDisciplineDbId(disciplines[0]?.slug ?? '');
+    if (!disciplineId) {
+      setError(
+        isAr
+          ? 'تعذر تحميل التخصص من قاعدة البيانات. يرجى تحديث الصفحة والمحاولة مرة أخرى.'
+          : 'Unable to resolve discipline from Supabase. Please refresh and try again.',
+      );
+      return;
     }
 
-    setError(null);
-    setFeedback(
-      submitImmediately
-        ? t('instructor.selfService.proposal.submittedSuccess')
-        : t('instructor.selfService.proposal.savedDraftSuccess'),
-    );
-    setTimeout(() => navigate('/instructor/courses'), 600);
+    setSubmitting(true);
+    const parsedObjectives = toLines(outcomesText);
+    const { data, error: createErr } = await instructorCreateDraftCourse({
+      disciplineId,
+      titleAr: titleAr.trim(),
+      titleEn: titleEn.trim(),
+      shortDescAr: shortDescAr.trim(),
+      shortDescEn: shortDescEn.trim(),
+      fullDescAr: fullDescAr.trim() || shortDescAr.trim(),
+      fullDescEn: fullDescEn.trim() || shortDescEn.trim(),
+      level,
+      language,
+      durationAr: durationAr.trim() || '6 أسابيع',
+      durationEn: durationEn.trim() || '6 Weeks',
+      thumbnailUrl: thumbnailUrl.trim() || undefined,
+      whatYouWillLearn: parsedObjectives,
+      objectives: parsedObjectives,
+      requirements: toLines(requirementsText),
+      targetAudience: toLines(audienceText),
+      isFree,
+      priceAmount: isFree ? 0 : Math.max(0, Number(priceAmount) || 0),
+      currency,
+      paymentMethods: paymentMethods.length > 0 ? paymentMethods : ['vodafone_cash'],
+      paymentInstructionsAr: payInstAr.trim(),
+      paymentInstructionsEn: payInstEn.trim(),
+      enrollmentOpen,
+    });
+
+    if (createErr || !data) {
+      setSubmitting(false);
+      setError(createErr || (isAr ? 'تعذر إنشاء الدورة.' : 'Failed to create course.'));
+      return;
+    }
+
+    await refreshInstructorData();
+    setSubmitting(false);
+    navigate(`/instructor/courses/${data.slug}/curriculum`, { replace: true });
   };
 
   const BackIcon = dir === 'rtl' ? ArrowRight : ArrowLeft;
@@ -116,16 +149,16 @@ export function CourseProposalPage() {
   return (
     <div className="details-stack">
       <StudentPageHeader
-        title={
-          existing
-            ? t('instructor.selfService.proposal.reviseTitle')
-            : t('instructor.selfService.proposal.pageTitle')
+        title={isAr ? 'إنشاء دورة جديدة' : 'Create New Course'}
+        subtitle={
+          isAr
+            ? 'أدخل تفاصيل الدورة والتسعير واحفظها كمسودة لبناء المنهج والدروس ثم إرسالها لاعتماد الإدارة.'
+            : 'Enter course details and direct-payment pricing, save as Draft, build your curriculum, and submit for Super Admin approval.'
         }
-        subtitle={t('instructor.selfService.proposal.pageSubtitle')}
         breadcrumbs={[
           { label: t('instructor.nav.dashboard'), to: '/instructor' },
           { label: t('instructor.nav.courses'), to: '/instructor/courses' },
-          { label: t('instructor.selfService.proposeCourseBtn') },
+          { label: isAr ? 'إنشاء دورة جديدة' : 'Create New Course' },
         ]}
         action={
           <Link to="/instructor/courses" className="ui-btn ui-btn--secondary ui-btn--sm">
@@ -134,24 +167,23 @@ export function CourseProposalPage() {
         }
       />
 
-      {existing?.status === 'rejected' && existing.rejectionReason ? (
-        <Alert variant="error" title={t('admin.statuses.rejected')}>
-          {existing.rejectionReason[locale]}
-        </Alert>
-      ) : null}
+      <form onSubmit={handleCreateDraft} className="details-stack" style={{ gap: 18 }}>
+        {/* Section 1: Basic Information */}
+        <Card className="details-stack" style={{ gap: 14 }}>
+          <h2 className="text-h3">{isAr ? '1. المعلومات الأساسية' : '1. Basic Information'}</h2>
 
-      <Card>
-        <div className="details-stack" style={{ gap: 14 }}>
           <div className="grid-2">
             <Input
               label={t('instructor.selfService.proposal.titleAr')}
               value={titleAr}
               onChange={(e) => setTitleAr(e.target.value)}
+              required
             />
             <Input
               label={t('instructor.selfService.proposal.titleEn')}
               value={titleEn}
               onChange={(e) => setTitleEn(e.target.value)}
+              required
             />
           </div>
 
@@ -161,12 +193,14 @@ export function CourseProposalPage() {
               rows={2}
               value={shortDescAr}
               onChange={(e) => setShortDescAr(e.target.value)}
+              required
             />
             <Textarea
               label={t('instructor.selfService.proposal.shortDescEn')}
               rows={2}
               value={shortDescEn}
               onChange={(e) => setShortDescEn(e.target.value)}
+              required
             />
           </div>
 
@@ -231,23 +265,11 @@ export function CourseProposalPage() {
               onChange={(e) => setDurationEn(e.target.value)}
             />
             <Input
-              label={t('instructor.selfService.proposal.suggestedPrice')}
-              value={suggestedPrice}
-              onChange={(e) => setSuggestedPrice(e.target.value)}
-            />
-          </div>
-
-          <div className="grid-2">
-            <Input
               label={t('instructor.selfService.proposal.thumbnailUrl')}
               placeholder="https://example.com/course-cover.jpg"
+              dir="ltr"
               value={thumbnailUrl}
               onChange={(e) => setThumbnailUrl(e.target.value)}
-            />
-            <Input
-              label={t('instructor.selfService.proposal.enrollmentNotes')}
-              value={enrollmentNotes}
-              onChange={(e) => setEnrollmentNotes(e.target.value)}
             />
           </div>
 
@@ -271,20 +293,123 @@ export function CourseProposalPage() {
               onChange={(e) => setAudienceText(e.target.value)}
             />
           </div>
+        </Card>
 
-          {error ? <Alert variant="error" title={error} /> : null}
-          {feedback ? <Alert variant="success" title={feedback} /> : null}
+        {/* Section 2: Pricing & Direct-to-Instructor Enrollment */}
+        <Card className="details-stack" style={{ gap: 14 }}>
+          <h2 className="text-h3">
+            {isAr ? '2. التسعير وتنسيق الدفع المباشر' : '2. Pricing & Direct-to-Instructor Enrollment'}
+          </h2>
+          <Alert
+            variant="info"
+            title={isAr ? 'نموذج الدفع المباشر للمدرب' : 'Direct-to-Instructor Payment Model'}
+          >
+            {isAr
+              ? 'أكاديمية أثر لا تجمع رسوم الدورات؛ يدفع الطالب للمدرب مباشرة خارج المنصة ثم يؤكد المدرب استلام الدفع لتفعيل الوصول.'
+              : 'ATHAR ACADEMY does not collect course fees. Students pay you directly outside the platform, and you confirm receipt to activate access.'}
+          </Alert>
 
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <Button variant="secondary" onClick={() => handleSave(false)}>
-              {t('instructor.selfService.proposal.saveDraftBtn')}
-            </Button>
-            <Button variant="primary" onClick={() => handleSave(true)}>
-              <Send size={15} aria-hidden="true" /> {t('instructor.selfService.proposal.submitBtn')}
-            </Button>
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={isFree}
+                onChange={(e) => setIsFree(e.target.checked)}
+              />
+              <span className="text-small" style={{ fontWeight: 600 }}>
+                {isAr ? 'دورة مجانية' : 'Free Course'}
+              </span>
+            </label>
+            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={enrollmentOpen}
+                onChange={(e) => setEnrollmentOpen(e.target.checked)}
+              />
+              <span className="text-small" style={{ fontWeight: 600 }}>
+                {isAr ? 'الالتحاق متاح' : 'Enrollment Open'}
+              </span>
+            </label>
           </div>
+
+          {!isFree ? (
+            <>
+              <div className="grid-2">
+                <Input
+                  label={isAr ? 'سعر الدورة' : 'Price Amount'}
+                  type="number"
+                  min={0}
+                  value={priceAmount}
+                  onChange={(e) => setPriceAmount(e.target.value)}
+                />
+                <Select
+                  label={isAr ? 'العملة' : 'Currency'}
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value as CourseCurrency)}
+                >
+                  <option value="EGP">EGP</option>
+                  <option value="USD">USD</option>
+                  <option value="SAR">SAR</option>
+                </Select>
+              </div>
+
+              <div>
+                <div className="ui-field__label" style={{ marginBlockEnd: 8 }}>
+                  {isAr ? 'طرق الدفع المباشر المقبولة' : 'Accepted Direct Payment Methods'}
+                </div>
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                  {ALL_PAYMENT_METHODS.map((pm) => (
+                    <label
+                      key={pm.id}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={paymentMethods.includes(pm.id)}
+                        onChange={() => toggleMethod(pm.id)}
+                      />
+                      <span className="text-small">{isAr ? pm.ar : pm.en}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid-2">
+                <Textarea
+                  label={isAr ? 'تعليمات الدفع المباشر (عربي)' : 'Direct Payment Instructions (Arabic)'}
+                  rows={2}
+                  value={payInstAr}
+                  onChange={(e) => setPayInstAr(e.target.value)}
+                />
+                <Textarea
+                  label={isAr ? 'تعليمات الدفع المباشر (إنجليزي)' : 'Direct Payment Instructions (English)'}
+                  rows={2}
+                  value={payInstEn}
+                  onChange={(e) => setPayInstEn(e.target.value)}
+                />
+              </div>
+            </>
+          ) : null}
+        </Card>
+
+        {error ? <Alert variant="error" title={error} /> : null}
+
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <Button type="submit" variant="primary" size="lg" disabled={submitting}>
+            <BookPlus size={16} aria-hidden="true" />{' '}
+            {submitting
+              ? isAr
+                ? 'جارٍ الحفظ في قاعدة البيانات...'
+                : 'Saving Draft to Supabase...'
+              : isAr
+                ? 'حفظ كمسودة وبناء المنهج'
+                : 'Save Draft & Build Curriculum'}
+          </Button>
+          <Link to="/instructor/courses" className="ui-btn ui-btn--secondary ui-btn--lg">
+            {t('admin.common.cancel')}
+          </Link>
         </div>
-      </Card>
+      </form>
     </div>
   );
 }

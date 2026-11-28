@@ -111,6 +111,7 @@ function readInitialAdminActive(): boolean {
 export interface PlatformDemoContextValue {
   getCourseDbId: (courseSlug: string) => string | undefined;
   getDisciplineDbId: (disciplineSlug: string) => string | undefined;
+  refreshLiveCatalog: () => Promise<void>;
   isAdminDemoActive: boolean;
   enterAdminDemo: () => void;
   exitAdminDemo: () => void;
@@ -326,32 +327,30 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
   const [courses, setCourses] = useState<PlatformCourse[]>(INITIAL_PLATFORM_COURSES);
 
   // Hydrate live catalog from Supabase PostgreSQL (preserves local fallback if offline/dev)
+  const refreshLiveCatalog = useCallback(async () => {
+    const snapshot = await fetchLiveCatalog();
+    if (!snapshot) return;
+    courseIdBySlugRef.current = snapshot.courseIdBySlug;
+    disciplineIdBySlugRef.current = snapshot.disciplineIdBySlug;
+    if (snapshot.disciplines.length > 0) {
+      setDisciplines(snapshot.disciplines);
+    }
+    if (snapshot.courses.length > 0) {
+      if (import.meta.env.DEV) {
+        const liveSlugs = new Set(snapshot.courses.map((c) => c.slug));
+        setCourses([
+          ...snapshot.courses,
+          ...INITIAL_PLATFORM_COURSES.filter((c) => !liveSlugs.has(c.slug)),
+        ]);
+      } else {
+        setCourses(snapshot.courses);
+      }
+    }
+  }, []);
+
   useEffect(() => {
-    let active = true;
-    void fetchLiveCatalog().then((snapshot) => {
-      if (!active || !snapshot) return;
-      courseIdBySlugRef.current = snapshot.courseIdBySlug;
-      disciplineIdBySlugRef.current = snapshot.disciplineIdBySlug;
-      if (snapshot.disciplines.length > 0) {
-        setDisciplines(snapshot.disciplines);
-      }
-      if (snapshot.courses.length > 0) {
-        // Merge live DB courses with any dev-only local catalog items when in DEV mode
-        if (import.meta.env.DEV) {
-          const liveSlugs = new Set(snapshot.courses.map((c) => c.slug));
-          setCourses([
-            ...snapshot.courses,
-            ...INITIAL_PLATFORM_COURSES.filter((c) => !liveSlugs.has(c.slug)),
-          ]);
-        } else {
-          setCourses(snapshot.courses);
-        }
-      }
-    });
-    return () => {
-      active = false;
-    };
-  }, [user?.id]);
+    void refreshLiveCatalog();
+  }, [refreshLiveCatalog, user?.id]);
   const [courseProposals, setCourseProposals] = useState<CourseProposal[]>([]);
   const [students, setStudents] = useState<PlatformStudent[]>(INITIAL_PLATFORM_STUDENTS);
   const [studentEnrolledCourses, setStudentEnrolledCourses] =
@@ -2624,6 +2623,7 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
     () => ({
       getCourseDbId,
       getDisciplineDbId,
+      refreshLiveCatalog,
       isAdminDemoActive,
       enterAdminDemo,
       exitAdminDemo,
@@ -2706,6 +2706,7 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
     [
       getCourseDbId,
       getDisciplineDbId,
+      refreshLiveCatalog,
       isAdminDemoActive,
       enterAdminDemo,
       exitAdminDemo,
