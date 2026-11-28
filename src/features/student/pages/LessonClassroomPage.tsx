@@ -11,6 +11,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useI18n } from '../../../app/providers/I18nProvider';
 import { usePlatformDemo } from '../../../app/providers/PlatformDemoContext';
 import { Alert, Badge, Button, Card, EmptyState, Textarea } from '../../../components/ui';
+import { getSignedResourceUrl } from '../../../services/lmsService';
 import { CurriculumSidebar } from '../components/CurriculumSidebar';
 import { StudentPageHeader } from '../components/StudentPageHeader';
 import { VideoPlaceholder } from '../components/VideoPlaceholder';
@@ -160,7 +161,25 @@ export function LessonClassroomPage() {
                     <span>{res.title[locale]}</span>
                     <Badge variant="teal">{res.type.toUpperCase()}</Badge>
                   </div>
-                  <Button variant="tertiary" size="sm" onClick={() => setResourceAlert(true)}>
+                  <Button
+                    variant="tertiary"
+                    size="sm"
+                    onClick={async () => {
+                      const target = res.fileNameOrUrl?.trim();
+                      if (target?.startsWith('http://') || target?.startsWith('https://')) {
+                        window.open(target, '_blank', 'noopener,noreferrer');
+                        return;
+                      }
+                      if (target?.includes('/')) {
+                        const { url } = await getSignedResourceUrl(target, 300);
+                        if (url) {
+                          window.open(url, '_blank', 'noopener,noreferrer');
+                          return;
+                        }
+                      }
+                      setResourceAlert(true);
+                    }}
+                  >
                     <Download size={14} aria-hidden="true" /> {t('student.classroom.downloadDemo')}
                   </Button>
                 </li>

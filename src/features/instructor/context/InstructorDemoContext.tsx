@@ -6,7 +6,18 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useAuth } from '../../../app/providers/AuthProvider';
 import { usePlatformDemo } from '../../../app/providers/PlatformDemoContext';
+import {
+  dbCreateAnnouncement,
+  dbCreateCommunityPost,
+  dbDeleteCommunityPost,
+  dbMarkConversationRead,
+  dbModerateCommunityPost,
+  dbPublishAnnouncement,
+  dbSendMessage,
+  isUuid,
+} from '../../../services/lmsService';
 import type {
   CourseLanguage,
   CoursePricingConfig,
@@ -164,6 +175,7 @@ export interface InstructorDemoContextValue {
 const InstructorDemoContext = createContext<InstructorDemoContextValue | null>(null);
 
 export function InstructorDemoProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const platform = usePlatformDemo();
 
   const [isDemoActive, setIsDemoActive] = useState<boolean>(readInitialActive);
@@ -432,21 +444,57 @@ export function InstructorDemoProvider({ children }: { children: ReactNode }) {
     [profile],
   );
 
-  const togglePinPost = useCallback((postId: string) => {
-    setPosts((prev) =>
-      prev.map((p) => (p.id === postId ? { ...p, isPinned: !p.isPinned } : p)),
-    );
-  }, []);
+  const togglePinPost = useCallback(
+    (postId: string) => {
+      const target = posts.find((p) => p.id === postId);
+      setPosts((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, isPinned: !p.isPinned } : p)),
+      );
+      if (user && isUuid(postId)) {
+        void dbModerateCommunityPost(
+          postId,
+          { is_pinned: !target?.isPinned },
+          {
+            courseId: target ? platform.getCourseDbId(target.courseSlug) : undefined,
+            moderatorId: user.id,
+            actionType: !target?.isPinned ? 'pin_post' : 'unpin_post',
+          },
+        );
+      }
+    },
+    [platform, posts, user],
+  );
 
-  const toggleHidePost = useCallback((postId: string) => {
-    setPosts((prev) =>
-      prev.map((p) => (p.id === postId ? { ...p, isHidden: !p.isHidden } : p)),
-    );
-  }, []);
+  const toggleHidePost = useCallback(
+    (postId: string) => {
+      const target = posts.find((p) => p.id === postId);
+      setPosts((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, isHidden: !p.isHidden } : p)),
+      );
+      if (user && isUuid(postId)) {
+        void dbModerateCommunityPost(
+          postId,
+          { is_hidden: !target?.isHidden },
+          {
+            courseId: target ? platform.getCourseDbId(target.courseSlug) : undefined,
+            moderatorId: user.id,
+            actionType: !target?.isHidden ? 'hide_post' : 'unhide_post',
+          },
+        );
+      }
+    },
+    [platform, posts, user],
+  );
 
-  const deletePost = useCallback((postId: string) => {
-    setPosts((prev) => prev.filter((p) => p.id !== postId));
-  }, []);
+  const deletePost = useCallback(
+    (postId: string) => {
+      setPosts((prev) => prev.filter((p) => p.id !== postId));
+      if (user && isUuid(postId)) {
+        void dbDeleteCommunityPost(postId);
+      }
+    },
+    [user],
+  );
 
   const publishCommunityAnnouncement = useCallback(
     (courseSlug: string, title: string, content: string) => {
@@ -455,8 +503,9 @@ export function InstructorDemoProvider({ children }: { children: ReactNode }) {
       if (!trimmedTitle || !trimmedContent) return;
       if (!assignedCourses.some((c) => c.slug === courseSlug)) return;
 
+      const tempId = `ipost-ann-${Date.now()}`;
       const newPost: ModerationPostItem = {
-        id: `ipost-ann-${Date.now()}`,
+        id: tempId,
         courseSlug,
         authorName: profile.fullName,
         authorRole: 'instructor',
@@ -470,8 +519,21 @@ export function InstructorDemoProvider({ children }: { children: ReactNode }) {
         replies: [],
       };
       setPosts((prev) => [newPost, ...prev]);
+      const courseDbId = platform.getCourseDbId(courseSlug);
+      if (user && courseDbId) {
+        void dbCreateCommunityPost({
+          courseId: courseDbId,
+          authorId: user.id,
+          title: trimmedTitle,
+          content: trimmedContent,
+          isAnnouncement: true,
+        }).then(({ data }) => {
+          if (!data?.id) return;
+          setPosts((prev) => prev.map((p) => (p.id === tempId ? { ...p, id: data.id } : p)));
+        });
+      }
     },
-    [assignedCourses, profile],
+    [assignedCourses, platform, profile, user],
   );
 
   const createAnnouncement = useCallback(
@@ -481,8 +543,9 @@ export function InstructorDemoProvider({ children }: { children: ReactNode }) {
       const trimmedBody = body.trim();
       if (!trimmedTitle || !trimmedBody) return;
 
+      const tempId = `ann-${Date.now()}`;
       const record: InstructorAnnouncementRecord = {
-        id: `ann-${Date.now()}`,
+        id: tempId,
         courseSlug,
         title: { ar: trimmedTitle, en: trimmedTitle },
         body: { ar: trimmedBody, en: trimmedBody },
@@ -490,11 +553,26 @@ export function InstructorDemoProvider({ children }: { children: ReactNode }) {
         createdAt: { ar: 'الآن (تجريبي)', en: 'Just now (Demo)' },
       };
       setAnnouncements((prev) => [record, ...prev]);
+      const courseDbId = platform.getCourseDbId(courseSlug);
+      if (user && courseDbId) {
+        void dbCreateAnnouncement({
+          courseId: courseDbId,
+          authorId: user.id,
+          title: trimmedTitle,
+          body: trimmedBody,
+          status,
+        }).then(({ data }) => {
+          if (!data?.id) return;
+          setAnnouncements((prev) =>
+            prev.map((a) => (a.id === tempId ? { ...a, id: data.id } : a)),
+          );
+        });
+      }
       if (status === 'published') {
         publishCommunityAnnouncement(courseSlug, trimmedTitle, trimmedBody);
       }
     },
-    [assignedCourses, publishCommunityAnnouncement],
+    [assignedCourses, platform, publishCommunityAnnouncement, user],
   );
 
   const publishAnnouncement = useCallback(
@@ -504,40 +582,55 @@ export function InstructorDemoProvider({ children }: { children: ReactNode }) {
       setAnnouncements((prev) =>
         prev.map((a) => (a.id === id ? { ...a, status: 'published' } : a)),
       );
+      if (user && isUuid(id)) {
+        void dbPublishAnnouncement(id);
+      }
       publishCommunityAnnouncement(target.courseSlug, target.title.en, target.body.en);
     },
-    [announcements, publishCommunityAnnouncement],
+    [announcements, publishCommunityAnnouncement, user],
   );
 
-  const sendMessage = useCallback((conversationId: string, content: string) => {
-    const trimmed = content.trim();
-    if (!trimmed) return;
-    setConversations((prev) =>
-      prev.map((conv) =>
-        conv.id === conversationId
-          ? {
-              ...conv,
-              unreadCount: 0,
-              messages: [
-                ...conv.messages,
-                {
-                  id: `im-${Date.now()}`,
-                  sender: 'instructor',
-                  content: { ar: trimmed, en: trimmed },
-                  timeLabel: { ar: 'الآن (تجريبي)', en: 'Just now (Demo)' },
-                },
-              ],
-            }
-          : conv,
-      ),
-    );
-  }, []);
+  const sendMessage = useCallback(
+    (conversationId: string, content: string) => {
+      const trimmed = content.trim();
+      if (!trimmed) return;
+      setConversations((prev) =>
+        prev.map((conv) =>
+          conv.id === conversationId
+            ? {
+                ...conv,
+                unreadCount: 0,
+                messages: [
+                  ...conv.messages,
+                  {
+                    id: `im-${Date.now()}`,
+                    sender: 'instructor',
+                    content: { ar: trimmed, en: trimmed },
+                    timeLabel: { ar: 'الآن (تجريبي)', en: 'Just now (Demo)' },
+                  },
+                ],
+              }
+            : conv,
+        ),
+      );
+      if (user && isUuid(conversationId)) {
+        void dbSendMessage(conversationId, user.id, trimmed);
+      }
+    },
+    [user],
+  );
 
-  const markConversationRead = useCallback((conversationId: string) => {
-    setConversations((prev) =>
-      prev.map((conv) => (conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv)),
-    );
-  }, []);
+  const markConversationRead = useCallback(
+    (conversationId: string) => {
+      setConversations((prev) =>
+        prev.map((conv) => (conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv)),
+      );
+      if (user && isUuid(conversationId)) {
+        void dbMarkConversationRead(conversationId, user.id);
+      }
+    },
+    [user],
+  );
 
   const updateNotificationPref = useCallback(
     (key: keyof InstructorNotificationPreferences, value: boolean) => {

@@ -9,14 +9,40 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  dbCreateCourse,
+  dbCreateDiscipline,
+  dbCreateLesson,
+  dbCreateLessonRevision,
+  dbCreateModule,
+  dbDeleteCommunityPost,
+  dbDeleteCourseReview,
+  dbDeleteDiscipline,
+  dbDeleteLesson,
+  dbDeleteModule,
+  dbMarkAllNotificationsRead,
+  dbMarkNotificationRead,
+  dbModerateCommunityPost,
+  dbModerateCourseReview,
+  dbReorderLessons,
+  dbReorderModules,
+  dbUpdateCourse,
+  dbUpdateCoursePricing,
+  dbUpdateDiscipline,
+  dbUpdateLesson,
+  dbUpdateModule,
+  dbUpdatePlatformSettings,
   fetchLiveCatalog,
+  isUuid,
   rpcAcceptEnrollment,
   rpcAdminOverrideEnrollment,
   rpcAdminReactivateEnrollment,
   rpcAdminSuspendEnrollment,
+  rpcCancelEnrollment,
   rpcConfirmDirectPayment,
   rpcRejectEnrollment,
+  rpcResolveDispute,
   rpcSubmitEnrollment,
+  submitDisputeToDb,
 } from '../../services/lmsService';
 import { useAuth } from './AuthProvider';
 import {
@@ -83,6 +109,8 @@ function readInitialAdminActive(): boolean {
 }
 
 export interface PlatformDemoContextValue {
+  getCourseDbId: (courseSlug: string) => string | undefined;
+  getDisciplineDbId: (disciplineSlug: string) => string | undefined;
   isAdminDemoActive: boolean;
   enterAdminDemo: () => void;
   exitAdminDemo: () => void;
@@ -285,6 +313,9 @@ const PlatformDemoContext = createContext<PlatformDemoContextValue | null>(null)
 export function PlatformDemoProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const courseIdBySlugRef = useRef<Record<string, string>>({});
+  const disciplineIdBySlugRef = useRef<Record<string, string>>({});
+  const getCourseDbId = useCallback((slug: string) => courseIdBySlugRef.current[slug], []);
+  const getDisciplineDbId = useCallback((slug: string) => disciplineIdBySlugRef.current[slug], []);
   const [isAdminDemoActive, setIsAdminDemoActive] = useState<boolean>(readInitialAdminActive);
   const [disciplines, setDisciplines] = useState<PlatformDiscipline[]>(
     INITIAL_PLATFORM_DISCIPLINES,
@@ -300,6 +331,7 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
     void fetchLiveCatalog().then((snapshot) => {
       if (!active || !snapshot) return;
       courseIdBySlugRef.current = snapshot.courseIdBySlug;
+      disciplineIdBySlugRef.current = snapshot.disciplineIdBySlug;
       if (snapshot.disciplines.length > 0) {
         setDisciplines(snapshot.disciplines);
       }
@@ -420,13 +452,43 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         isActive: true,
       };
       setDisciplines((prev) => [newDisc, ...prev]);
+      if (user) {
+        void dbCreateDiscipline({
+          slug,
+          nameAr: input.nameAr.trim(),
+          nameEn: input.nameEn.trim(),
+          descAr: input.descAr.trim(),
+          descEn: input.descEn.trim(),
+        }).then(({ data }) => {
+          if (data?.id) {
+            disciplineIdBySlugRef.current[slug] = data.id;
+          }
+        });
+      }
     },
-    [],
+    [user],
   );
 
-  const updateDiscipline = useCallback((slug: string, patch: Partial<PlatformDiscipline>) => {
-    setDisciplines((prev) => prev.map((d) => (d.slug === slug ? { ...d, ...patch } : d)));
-  }, []);
+  const updateDiscipline = useCallback(
+    (slug: string, patch: Partial<PlatformDiscipline>) => {
+      setDisciplines((prev) => prev.map((d) => (d.slug === slug ? { ...d, ...patch } : d)));
+      const dbId = disciplineIdBySlugRef.current[slug];
+      if (user && dbId) {
+        void dbUpdateDiscipline(dbId, {
+          ...(patch.name ? { name_ar: patch.name.ar, name_en: patch.name.en } : {}),
+          ...(patch.shortDescription
+            ? {
+                short_description_ar: patch.shortDescription.ar,
+                short_description_en: patch.shortDescription.en,
+              }
+            : {}),
+          ...(patch.isActive !== undefined ? { is_active: patch.isActive } : {}),
+          ...(patch.featured !== undefined ? { featured: patch.featured } : {}),
+        });
+      }
+    },
+    [user],
+  );
 
   const deleteDiscipline = useCallback(
     (slug: string): { ok: boolean; reason?: 'has_courses' } => {
@@ -434,9 +496,13 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         return { ok: false, reason: 'has_courses' };
       }
       setDisciplines((prev) => prev.filter((d) => d.slug !== slug));
+      const dbId = disciplineIdBySlugRef.current[slug];
+      if (user && dbId) {
+        void dbDeleteDiscipline(dbId);
+      }
       return { ok: true };
     },
-    [courses],
+    [courses, user],
   );
 
   // Instructors
@@ -568,6 +634,27 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
       };
 
       setCourses((prev) => [newCourse, ...prev]);
+      const discId = disciplineIdBySlugRef.current[input.disciplineSlug];
+      if (user && discId) {
+        void dbCreateCourse({
+          slug,
+          code: newCourse.code,
+          disciplineId: discId,
+          titleAr: newCourse.title.ar,
+          titleEn: newCourse.title.en,
+          shortDescAr: newCourse.shortDescription.ar,
+          shortDescEn: newCourse.shortDescription.en,
+          level: input.level,
+          durationAr: newCourse.duration.ar,
+          durationEn: newCourse.duration.en,
+          status: input.status,
+          createdBy: user.id,
+        }).then(({ data }) => {
+          if (data?.id) {
+            courseIdBySlugRef.current[slug] = data.id;
+          }
+        });
+      }
       pushActivity(
         'course',
         `أنشأت الإدارة دورة جديدة: ${newCourse.title.ar}`,
@@ -575,22 +662,47 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
       );
       return newCourse;
     },
-    [pushActivity],
+    [pushActivity, user],
   );
 
-  const updateCourse = useCallback((slug: string, patch: Partial<PlatformCourse>) => {
-    setCourses((prev) =>
-      prev.map((c) =>
-        c.slug === slug
-          ? {
+  const updateCourse = useCallback(
+    (slug: string, patch: Partial<PlatformCourse>) => {
+      setCourses((prev) =>
+        prev.map((c) =>
+          c.slug === slug
+            ? {
               ...c,
               ...patch,
               lastUpdated: { ar: 'الآن (محدّث)', en: 'Just now (Updated)' },
             }
-          : c,
-      ),
-    );
-  }, []);
+            : c,
+        ),
+      );
+      const courseDbId = courseIdBySlugRef.current[slug];
+      if (user && courseDbId) {
+        const dbPatch: Record<string, unknown> = {};
+        if (patch.title) {
+          dbPatch.title_ar = patch.title.ar;
+          dbPatch.title_en = patch.title.en;
+        }
+        if (patch.shortDescription) {
+          dbPatch.short_description_ar = patch.shortDescription.ar;
+          dbPatch.short_description_en = patch.shortDescription.en;
+        }
+        if (patch.fullDescription) {
+          dbPatch.full_description_ar = patch.fullDescription.ar;
+          dbPatch.full_description_en = patch.fullDescription.en;
+        }
+        if (patch.status) dbPatch.status = patch.status;
+        if (patch.level) dbPatch.level = patch.level;
+        if (patch.featured !== undefined) dbPatch.featured = patch.featured;
+        if (Object.keys(dbPatch).length > 0) {
+          void dbUpdateCourse(courseDbId, dbPatch);
+        }
+      }
+    },
+    [user],
+  );
 
   const setCourseSuspended = useCallback(
     (courseSlug: string, suspended: boolean) => {
@@ -598,21 +710,25 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         prev.map((c) =>
           c.slug === courseSlug
             ? {
-                ...c,
-                suspended,
-                status: suspended && c.status === 'published' ? 'draft' : c.status,
-                lastUpdated: { ar: 'الآن (حالة التعليق)', en: 'Just now (Suspension updated)' },
-              }
+              ...c,
+              suspended,
+              status: suspended && c.status === 'published' ? 'draft' : c.status,
+              lastUpdated: { ar: 'الآن (حالة التعليق)', en: 'Just now (Suspension updated)' },
+            }
             : c,
         ),
       );
+      const courseDbId = courseIdBySlugRef.current[courseSlug];
+      if (user && courseDbId) {
+        void dbUpdateCourse(courseDbId, { is_suspended: suspended });
+      }
       pushActivity(
         'course',
         suspended ? `تم تعليق دورة ${courseSlug} إداريًا` : `تم رفع التعليق عن دورة ${courseSlug}`,
         suspended ? `Admin suspended course ${courseSlug}` : `Admin lifted suspension on ${courseSlug}`,
       );
     },
-    [pushActivity],
+    [pushActivity, user],
   );
 
   const submitCourseForReview = useCallback(
@@ -623,10 +739,10 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         prev.map((c) =>
           c.slug === courseSlug
             ? {
-                ...c,
-                pendingApproval: true,
-                lastUpdated: { ar: 'الآن (مُرسل للمراجعة)', en: 'Just now (Submitted for review)' },
-              }
+              ...c,
+              pendingApproval: true,
+              lastUpdated: { ar: 'الآن (مُرسل للمراجعة)', en: 'Just now (Submitted for review)' },
+            }
             : c,
         ),
       );
@@ -645,10 +761,10 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         prev.map((c) =>
           c.slug === courseSlug
             ? {
-                ...c,
-                instructorSlugs,
-                lastUpdated: { ar: 'الآن (تحديث المدربين)', en: 'Just now (Assignments updated)' },
-              }
+              ...c,
+              instructorSlugs,
+              lastUpdated: { ar: 'الآن (تحديث المدربين)', en: 'Just now (Assignments updated)' },
+            }
             : c,
         ),
       );
@@ -661,30 +777,54 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
     [pushActivity],
   );
 
-  const addCourseModule = useCallback((courseSlug: string, title: string, description?: string) => {
-    const trimmed = title.trim();
-    if (!trimmed) return;
-    const descTrim = description?.trim() ?? '';
-    setCourses((prev) =>
-      prev.map((c) =>
-        c.slug === courseSlug
-          ? {
+  const addCourseModule = useCallback(
+    (courseSlug: string, title: string, description?: string) => {
+      const trimmed = title.trim();
+      if (!trimmed) return;
+      const descTrim = description?.trim() ?? '';
+      const tempId = `mod-demo-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+      const course = courses.find((c) => c.slug === courseSlug);
+      const nextSort = (course?.modules.length ?? 0) + 1;
+      setCourses((prev) =>
+        prev.map((c) =>
+          c.slug === courseSlug
+            ? {
               ...c,
               lastUpdated: { ar: 'الآن (تحديث المنهج)', en: 'Just now (Curriculum updated)' },
               modules: [
                 ...c.modules,
                 {
-                  id: `mod-demo-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+                  id: tempId,
                   title: { ar: trimmed, en: trimmed },
                   description: descTrim ? { ar: descTrim, en: descTrim } : undefined,
                   lessons: [],
                 },
               ],
             }
-          : c,
-      ),
-    );
-  }, []);
+            : c,
+        ),
+      );
+      const courseDbId = courseIdBySlugRef.current[courseSlug];
+      if (user && courseDbId) {
+        void dbCreateModule(courseDbId, trimmed, trimmed, nextSort, descTrim, descTrim).then(
+          ({ data }) => {
+            if (!data?.id) return;
+            setCourses((prev) =>
+              prev.map((c) =>
+                c.slug === courseSlug
+                  ? {
+                    ...c,
+                    modules: c.modules.map((m) => (m.id === tempId ? { ...m, id: data.id } : m)),
+                  }
+                  : c,
+              ),
+            );
+          },
+        );
+      }
+    },
+    [courses, user],
+  );
 
   const updateCourseModule = useCallback(
     (courseSlug: string, moduleId: string, patch: Partial<PlatformModule>) => {
@@ -692,30 +832,44 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         prev.map((c) =>
           c.slug === courseSlug
             ? {
-                ...c,
-                lastUpdated: { ar: 'الآن (تحديث الوحدة)', en: 'Just now (Module updated)' },
-                modules: c.modules.map((m) => (m.id === moduleId ? { ...m, ...patch } : m)),
-              }
+              ...c,
+              lastUpdated: { ar: 'الآن (تحديث الوحدة)', en: 'Just now (Module updated)' },
+              modules: c.modules.map((m) => (m.id === moduleId ? { ...m, ...patch } : m)),
+            }
             : c,
         ),
       );
+      if (user && isUuid(moduleId)) {
+        void dbUpdateModule(moduleId, {
+          ...(patch.title ? { title_ar: patch.title.ar, title_en: patch.title.en } : {}),
+          ...(patch.description
+            ? { description_ar: patch.description.ar, description_en: patch.description.en }
+            : {}),
+        });
+      }
     },
-    [],
+    [user],
   );
 
-  const deleteCourseModule = useCallback((courseSlug: string, moduleId: string) => {
-    setCourses((prev) =>
-      prev.map((c) =>
-        c.slug === courseSlug
-          ? {
+  const deleteCourseModule = useCallback(
+    (courseSlug: string, moduleId: string) => {
+      setCourses((prev) =>
+        prev.map((c) =>
+          c.slug === courseSlug
+            ? {
               ...c,
               lastUpdated: { ar: 'الآن (حذف وحدة)', en: 'Just now (Module removed)' },
               modules: c.modules.filter((m) => m.id !== moduleId),
             }
-          : c,
-      ),
-    );
-  }, []);
+            : c,
+        ),
+      );
+      if (user && isUuid(moduleId)) {
+        void dbDeleteModule(moduleId);
+      }
+    },
+    [user],
+  );
 
   const reorderCourseModules = useCallback(
     (courseSlug: string, fromIndex: number, toIndex: number) => {
@@ -734,6 +888,9 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
           const next = [...c.modules];
           const [moved] = next.splice(fromIndex, 1);
           next.splice(toIndex, 0, moved);
+          if (user) {
+            void dbReorderModules(next.map((m) => m.id));
+          }
           return {
             ...c,
             lastUpdated: { ar: 'الآن (إعادة ترتيب الوحدات)', en: 'Just now (Modules reordered)' },
@@ -742,15 +899,20 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         }),
       );
     },
-    [],
+    [user],
   );
 
   const addCourseLesson = useCallback(
     (courseSlug: string, moduleId: string, title: string, lessonType: LessonType = 'video') => {
       const trimmed = title.trim();
       if (!trimmed) return;
+      const tempId = `les-demo-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+      const targetMod = courses
+        .find((c) => c.slug === courseSlug)
+        ?.modules.find((m) => m.id === moduleId);
+      const nextSort = (targetMod?.lessons.length ?? 0) + 1;
       const newLesson: PlatformLesson = {
-        id: `les-demo-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+        id: tempId,
         title: { ar: trimmed, en: trimmed },
         shortDescription: { ar: '', en: '' },
         description: {
@@ -772,17 +934,50 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         prev.map((c) =>
           c.slug === courseSlug
             ? {
-                ...c,
-                lastUpdated: { ar: 'الآن (إضافة درس)', en: 'Just now (Lesson added)' },
-                modules: c.modules.map((m) =>
-                  m.id === moduleId ? { ...m, lessons: [...m.lessons, newLesson] } : m,
-                ),
-              }
+              ...c,
+              lastUpdated: { ar: 'الآن (إضافة درس)', en: 'Just now (Lesson added)' },
+              modules: c.modules.map((m) =>
+                m.id === moduleId ? { ...m, lessons: [...m.lessons, newLesson] } : m,
+              ),
+            }
             : c,
         ),
       );
+      const courseDbId = courseIdBySlugRef.current[courseSlug];
+      if (user && courseDbId && isUuid(moduleId)) {
+        void dbCreateLesson({
+          courseId: courseDbId,
+          moduleId,
+          titleAr: trimmed,
+          titleEn: trimmed,
+          lessonType,
+          sortOrder: nextSort,
+          status: 'draft',
+        }).then(({ data }) => {
+          if (!data?.id) return;
+          setCourses((prev) =>
+            prev.map((c) =>
+              c.slug === courseSlug
+                ? {
+                  ...c,
+                  modules: c.modules.map((m) =>
+                    m.id === moduleId
+                      ? {
+                        ...m,
+                        lessons: m.lessons.map((l) =>
+                          l.id === tempId ? { ...l, id: data.id } : l,
+                        ),
+                      }
+                      : m,
+                  ),
+                }
+                : c,
+            ),
+          );
+        });
+      }
     },
-    [],
+    [courses, user],
   );
 
   const deleteCourseLesson = useCallback(
@@ -791,19 +986,22 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         prev.map((c) =>
           c.slug === courseSlug
             ? {
-                ...c,
-                lastUpdated: { ar: 'الآن (حذف درس)', en: 'Just now (Lesson deleted)' },
-                modules: c.modules.map((m) =>
-                  m.id === moduleId
-                    ? { ...m, lessons: m.lessons.filter((l) => l.id !== lessonId) }
-                    : m,
-                ),
-              }
+              ...c,
+              lastUpdated: { ar: 'الآن (حذف درس)', en: 'Just now (Lesson deleted)' },
+              modules: c.modules.map((m) =>
+                m.id === moduleId
+                  ? { ...m, lessons: m.lessons.filter((l) => l.id !== lessonId) }
+                  : m,
+              ),
+            }
             : c,
         ),
       );
+      if (user && isUuid(lessonId)) {
+        void dbDeleteLesson(lessonId);
+      }
     },
-    [],
+    [user],
   );
 
   const duplicateCourseLesson = useCallback(
@@ -863,6 +1061,12 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
               const next = [...m.lessons];
               const [moved] = next.splice(fromIndex, 1);
               next.splice(toIndex, 0, moved);
+              if (user && isUuid(moduleId)) {
+                void dbReorderLessons(
+                  moduleId,
+                  next.map((l) => l.id),
+                );
+              }
               return { ...m, lessons: next };
             }),
           };
@@ -889,7 +1093,14 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
                 return { ...m, lessons: m.lessons.filter((l) => l.id !== lessonId) };
               }
               if (m.id === toModuleId) {
-                return { ...m, lessons: [...m.lessons, moving] };
+                const updated = [...m.lessons, moving];
+                if (user && isUuid(toModuleId)) {
+                  void dbReorderLessons(
+                    toModuleId,
+                    updated.map((l) => l.id),
+                  );
+                }
+                return { ...m, lessons: updated };
               }
               return m;
             }),
@@ -932,17 +1143,17 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
             prev.map((c) =>
               c.slug === courseSlug
                 ? {
-                    ...c,
-                    lastUpdated: { ar: 'الآن (تحديث درس منشور)', en: 'Just now (Published lesson updated)' },
-                    modules: c.modules.map((m) => ({
-                      ...m,
-                      lessons: m.lessons.map((l) =>
-                        l.id === lessonId
-                          ? { ...l, ...payload, status: 'published', pendingRevision: undefined }
-                          : l,
-                      ),
-                    })),
-                  }
+                  ...c,
+                  lastUpdated: { ar: 'الآن (تحديث درس منشور)', en: 'Just now (Published lesson updated)' },
+                  modules: c.modules.map((m) => ({
+                    ...m,
+                    lessons: m.lessons.map((l) =>
+                      l.id === lessonId
+                        ? { ...l, ...payload, status: 'published', pendingRevision: undefined }
+                        : l,
+                    ),
+                  })),
+                }
                 : c,
             ),
           );
@@ -961,15 +1172,15 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
           prev.map((c) =>
             c.slug === courseSlug
               ? {
-                  ...c,
-                  lastUpdated: { ar: 'الآن (نسخة معدّلة قيد المراجعة)', en: 'Just now (Revision saved)' },
-                  modules: c.modules.map((m) => ({
-                    ...m,
-                    lessons: m.lessons.map((l) =>
-                      l.id === lessonId ? { ...l, pendingRevision: revision } : l,
-                    ),
-                  })),
-                }
+                ...c,
+                lastUpdated: { ar: 'الآن (نسخة معدّلة قيد المراجعة)', en: 'Just now (Revision saved)' },
+                modules: c.modules.map((m) => ({
+                  ...m,
+                  lessons: m.lessons.map((l) =>
+                    l.id === lessonId ? { ...l, pendingRevision: revision } : l,
+                  ),
+                })),
+              }
               : c,
           ),
         );
@@ -980,6 +1191,29 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
             `أُرسلت نسخة محدثة للدرس "${payload.title.ar}" للموافقة الإدارية`,
             `Submitted updated revision of "${payload.title.en}" for Admin approval`,
           );
+        }
+        const courseDbId = courseIdBySlugRef.current[courseSlug];
+        if (user && courseDbId && isUuid(lessonId)) {
+          void dbCreateLessonRevision({
+            lessonId,
+            courseId: courseDbId,
+            submittedBy: user.id,
+            titleAr: payload.title.ar,
+            titleEn: payload.title.en,
+            shortDescAr: payload.shortDescription.ar,
+            shortDescEn: payload.shortDescription.en,
+            descAr: payload.description.ar,
+            descEn: payload.description.en,
+            lessonType: payload.lessonType,
+            videoProvider: payload.videoProvider,
+            videoUrl: payload.videoUrl,
+            videoSourceId: payload.videoSourceId,
+            durationMinutes: payload.durationMinutes,
+            materialsNoteAr: payload.materialsNote.ar,
+            materialsNoteEn: payload.materialsNote.en,
+            isPreview: payload.isPreview,
+            status: revStatus,
+          });
         }
         return { status: revStatus, isRevision: true };
       }
@@ -996,22 +1230,22 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         prev.map((c) =>
           c.slug === courseSlug
             ? {
-                ...c,
-                lastUpdated: { ar: 'الآن (تحديث درس)', en: 'Just now (Lesson updated)' },
-                modules: c.modules.map((m) => ({
-                  ...m,
-                  lessons: m.lessons.map((l) =>
-                    l.id === lessonId
-                      ? {
-                          ...l,
-                          ...payload,
-                          status: nextStatus,
-                          rejectionReason: undefined,
-                        }
-                      : l,
-                  ),
-                })),
-              }
+              ...c,
+              lastUpdated: { ar: 'الآن (تحديث درس)', en: 'Just now (Lesson updated)' },
+              modules: c.modules.map((m) => ({
+                ...m,
+                lessons: m.lessons.map((l) =>
+                  l.id === lessonId
+                    ? {
+                      ...l,
+                      ...payload,
+                      status: nextStatus,
+                      rejectionReason: undefined,
+                    }
+                    : l,
+                ),
+              })),
+            }
             : c,
         ),
       );
@@ -1028,6 +1262,25 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
           `تم نشر الدرس "${payload.title.ar}"`,
           `Lesson "${payload.title.en}" was published`,
         );
+      }
+      if (user && isUuid(lessonId)) {
+        void dbUpdateLesson(lessonId, {
+          title_ar: payload.title.ar,
+          title_en: payload.title.en,
+          short_description_ar: payload.shortDescription.ar,
+          short_description_en: payload.shortDescription.en,
+          description_ar: payload.description.ar,
+          description_en: payload.description.en,
+          duration_minutes: payload.durationMinutes,
+          lesson_type: payload.lessonType,
+          video_provider: payload.videoProvider,
+          video_url: payload.videoUrl ?? null,
+          video_source_id: payload.videoSourceId,
+          materials_note_ar: payload.materialsNote.ar,
+          materials_note_en: payload.materialsNote.en,
+          is_preview: payload.isPreview,
+          status: nextStatus,
+        });
       }
       return { status: nextStatus, isRevision: false };
     },
@@ -1107,11 +1360,11 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         prev.map((p) =>
           p.id === proposalId
             ? {
-                ...p,
-                status: 'pending_approval',
-                rejectionReason: undefined,
-                updatedAt: { ar: 'الآن (مُعاد إرساله)', en: 'Just now (Resubmitted)' },
-              }
+              ...p,
+              status: 'pending_approval',
+              rejectionReason: undefined,
+              updatedAt: { ar: 'الآن (مُعاد إرساله)', en: 'Just now (Resubmitted)' },
+            }
             : p,
         ),
       );
@@ -1204,12 +1457,12 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         prev.map((p) =>
           p.id === proposalId
             ? {
-                ...p,
-                status: 'approved',
-                rejectionReason: undefined,
-                approvedCourseSlug: uniqueSlug,
-                updatedAt: { ar: 'الآن (معتمد)', en: 'Just now (Approved)' },
-              }
+              ...p,
+              status: 'approved',
+              rejectionReason: undefined,
+              approvedCourseSlug: uniqueSlug,
+              updatedAt: { ar: 'الآن (معتمد)', en: 'Just now (Approved)' },
+            }
             : p,
         ),
       );
@@ -1241,19 +1494,19 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
       const reasonText = reason?.trim()
         ? { ar: reason.trim(), en: reason.trim() }
         : {
-            ar: 'يرجى استكمال تفاصيل المنهج والأهداف قبل إعادة الإرسال.',
-            en: 'Please expand the course details and outcomes before resubmitting.',
-          };
+          ar: 'يرجى استكمال تفاصيل المنهج والأهداف قبل إعادة الإرسال.',
+          en: 'Please expand the course details and outcomes before resubmitting.',
+        };
 
       setCourseProposals((prev) =>
         prev.map((p) =>
           p.id === proposalId
             ? {
-                ...p,
-                status: 'rejected',
-                rejectionReason: reasonText,
-                updatedAt: { ar: 'الآن (مرفوض)', en: 'Just now (Rejected)' },
-              }
+              ...p,
+              status: 'rejected',
+              rejectionReason: reasonText,
+              updatedAt: { ar: 'الآن (مرفوض)', en: 'Just now (Rejected)' },
+            }
             : p,
         ),
       );
@@ -1279,12 +1532,12 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         prev.map((c) =>
           c.slug === courseSlug
             ? {
-                ...c,
-                modules: c.modules.map((m) => ({
-                  ...m,
-                  lessons: m.lessons.map((l) => (l.id === lessonId ? { ...l, ...patch } : l)),
-                })),
-              }
+              ...c,
+              modules: c.modules.map((m) => ({
+                ...m,
+                lessons: m.lessons.map((l) => (l.id === lessonId ? { ...l, ...patch } : l)),
+              })),
+            }
             : c,
         ),
       );
@@ -1341,11 +1594,11 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         prev.map((c) =>
           c.slug === courseSlug
             ? {
-                ...c,
-                leadInstructorSlug,
-                enrollmentManagerSlugs,
-                lastUpdated: { ar: 'الآن (تحديث صلاحيات الالتحاق)', en: 'Just now (Permissions updated)' },
-              }
+              ...c,
+              leadInstructorSlug,
+              enrollmentManagerSlugs,
+              lastUpdated: { ar: 'الآن (تحديث صلاحيات الالتحاق)', en: 'Just now (Permissions updated)' },
+            }
             : c,
         ),
       );
@@ -1358,25 +1611,32 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
     [pushActivity],
   );
 
-  const updateCoursePricing = useCallback((courseSlug: string, pricing: CoursePricingConfig) => {
-    setCourses((prev) =>
-      prev.map((c) =>
-        c.slug === courseSlug
-          ? {
+  const updateCoursePricing = useCallback(
+    (courseSlug: string, pricing: CoursePricingConfig) => {
+      setCourses((prev) =>
+        prev.map((c) =>
+          c.slug === courseSlug
+            ? {
               ...c,
               pricing,
               priceLabel: pricing.isFree
                 ? { ar: 'مجانية', en: 'Free' }
                 : {
-                    ar: `${pricing.priceAmount.toLocaleString()} ${pricing.currency}`,
-                    en: `${pricing.priceAmount.toLocaleString()} ${pricing.currency}`,
-                  },
+                  ar: `${pricing.priceAmount.toLocaleString()} ${pricing.currency}`,
+                  en: `${pricing.priceAmount.toLocaleString()} ${pricing.currency}`,
+                },
               lastUpdated: { ar: 'الآن (تحديث التسعير)', en: 'Just now (Pricing updated)' },
             }
-          : c,
-      ),
-    );
-  }, []);
+            : c,
+        ),
+      );
+      const courseDbId = courseIdBySlugRef.current[courseSlug];
+      if (user && courseDbId) {
+        void dbUpdateCoursePricing(courseDbId, pricing);
+      }
+    },
+    [user],
+  );
 
   const canInstructorConfirmPayment = useCallback(
     (courseSlug: string, instructorSlug: string): boolean => {
@@ -1438,13 +1698,22 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const markStudentNotificationRead = useCallback((id: string) => {
-    setStudentNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
-  }, []);
+  const markStudentNotificationRead = useCallback(
+    (id: string) => {
+      setStudentNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+      if (user && isUuid(id)) {
+        void dbMarkNotificationRead(id);
+      }
+    },
+    [user],
+  );
 
   const markAllStudentNotificationsRead = useCallback(() => {
     setStudentNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-  }, []);
+    if (user) {
+      void dbMarkAllNotificationsRead(user.id);
+    }
+  }, [user]);
 
   // Enrollment Requests (Shared with Student, Instructor & Admin Portals)
   const getCourseAvailabilityForDemoStudent = useCallback(
@@ -1600,11 +1869,11 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
           prev.map((r) =>
             r.id === requestId
               ? {
-                  ...r,
-                  status: 'active',
-                  paymentStatus: 'not_required',
-                  updatedAt: { ar: 'الآن', en: 'Just now' },
-                }
+                ...r,
+                status: 'active',
+                paymentStatus: 'not_required',
+                updatedAt: { ar: 'الآن', en: 'Just now' },
+              }
               : r,
           ),
         );
@@ -1624,15 +1893,15 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         prev.map((r) =>
           r.id === requestId
             ? {
-                ...r,
-                status: 'awaiting_payment',
-                paymentStatus: 'awaiting_payment',
-                updatedAt: { ar: 'الآن', en: 'Just now' },
-                reviewNote: {
-                  ar: 'قبل المدرب طلبك — يرجى تنسيق الدفع المباشر حسب التعليمات الموضحة.',
-                  en: 'Instructor accepted your request — please coordinate direct payment using the instructions provided.',
-                },
-              }
+              ...r,
+              status: 'awaiting_payment',
+              paymentStatus: 'awaiting_payment',
+              updatedAt: { ar: 'الآن', en: 'Just now' },
+              reviewNote: {
+                ar: 'قبل المدرب طلبك — يرجى تنسيق الدفع المباشر حسب التعليمات الموضحة.',
+                en: 'Instructor accepted your request — please coordinate direct payment using the instructions provided.',
+              },
+            }
             : r,
         ),
       );
@@ -1679,23 +1948,23 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         prev.map((r) =>
           r.id === requestId
             ? {
-                ...r,
-                status: 'active',
-                paymentStatus: 'confirmed',
-                updatedAt: { ar: 'الآن', en: 'Just now' },
-                paymentConfirmation: {
-                  instructorSlug: actorInstructorSlug,
-                  instructorName: inst?.name ?? { ar: actorInstructorSlug, en: actorInstructorSlug },
-                  confirmedAt: { ar: 'الآن (إقرار المدرب)', en: 'Just now (Instructor Declaration)' },
-                  amount: r.priceSnapshot,
-                  currency: r.currency,
-                  declarationAccepted: true,
-                },
-                reviewNote: {
-                  ar: 'أقرّ المدرب باستلام الدفع المباشر وتم تفعيل وصولك للدورة.',
-                  en: 'Instructor declared direct payment received — your course access is now Active.',
-                },
-              }
+              ...r,
+              status: 'active',
+              paymentStatus: 'confirmed',
+              updatedAt: { ar: 'الآن', en: 'Just now' },
+              paymentConfirmation: {
+                instructorSlug: actorInstructorSlug,
+                instructorName: inst?.name ?? { ar: actorInstructorSlug, en: actorInstructorSlug },
+                confirmedAt: { ar: 'الآن (إقرار المدرب)', en: 'Just now (Instructor Declaration)' },
+                amount: r.priceSnapshot,
+                currency: r.currency,
+                declarationAccepted: true,
+              },
+              reviewNote: {
+                ar: 'أقرّ المدرب باستلام الدفع المباشر وتم تفعيل وصولك للدورة.',
+                en: 'Instructor declared direct payment received — your course access is now Active.',
+              },
+            }
             : r,
         ),
       );
@@ -1765,15 +2034,15 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         prev.map((r) =>
           r.id === requestId
             ? {
-                ...r,
-                status: 'active',
-                paymentStatus: r.isFreeSnapshot ? 'not_required' : 'confirmed',
-                updatedAt: { ar: 'الآن', en: 'Just now' },
-                reviewNote: {
-                  ar: 'تمت الموافقة من لوحة الإدارة — أصبحت الدورة متاحة الآن في "تعلّمي".',
-                  en: 'Approved by Super Admin — course is now accessible in My Learning.',
-                },
-              }
+              ...r,
+              status: 'active',
+              paymentStatus: r.isFreeSnapshot ? 'not_required' : 'confirmed',
+              updatedAt: { ar: 'الآن', en: 'Just now' },
+              reviewNote: {
+                ar: 'تمت الموافقة من لوحة الإدارة — أصبحت الدورة متاحة الآن في "تعلّمي".',
+                en: 'Approved by Super Admin — course is now accessible in My Learning.',
+              },
+            }
             : r,
         ),
       );
@@ -1810,9 +2079,9 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
       const reviewNote: BilingualText = trimmed
         ? { ar: trimmed, en: trimmed }
         : {
-            ar: 'تم رفض الطلب. تبقى الدورة مغلقة حتى اعتماد طلب جديد.',
-            en: 'Request rejected. Course remains locked until a new request is approved.',
-          };
+          ar: 'تم رفض الطلب. تبقى الدورة مغلقة حتى اعتماد طلب جديد.',
+          en: 'Request rejected. Course remains locked until a new request is approved.',
+        };
 
       setEnrollmentRequests((prev) =>
         prev.map((r) =>
@@ -1849,17 +2118,20 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         prev.map((r) =>
           r.id === requestId
             ? {
-                ...r,
-                status: 'cancelled',
-                updatedAt: { ar: 'الآن', en: 'Just now' },
-                reviewNote: reason?.trim() ? { ar: reason.trim(), en: reason.trim() } : r.reviewNote,
-              }
+              ...r,
+              status: 'cancelled',
+              updatedAt: { ar: 'الآن', en: 'Just now' },
+              reviewNote: reason?.trim() ? { ar: reason.trim(), en: reason.trim() } : r.reviewNote,
+            }
             : r,
         ),
       );
       appendAudit(requestId, 'enrollment_cancelled', actorId, actorRole, 'cancelled', target.status, reason);
+      if (user && isUuid(requestId)) {
+        void rpcCancelEnrollment(requestId, reason);
+      }
     },
-    [appendAudit, enrollmentRequests],
+    [appendAudit, enrollmentRequests, user],
   );
 
   const suspendEnrollment = useCallback(
@@ -1872,11 +2144,11 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         prev.map((r) =>
           r.id === requestId
             ? {
-                ...r,
-                status: 'suspended',
-                updatedAt: { ar: 'الآن', en: 'Just now' },
-                reviewNote: { ar: trimmed, en: trimmed },
-              }
+              ...r,
+              status: 'suspended',
+              updatedAt: { ar: 'الآن', en: 'Just now' },
+              reviewNote: { ar: trimmed, en: trimmed },
+            }
             : r,
         ),
       );
@@ -1909,11 +2181,11 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         prev.map((r) =>
           r.id === requestId
             ? {
-                ...r,
-                status: 'active',
-                updatedAt: { ar: 'الآن', en: 'Just now' },
-                reviewNote: { ar: trimmed, en: trimmed },
-              }
+              ...r,
+              status: 'active',
+              updatedAt: { ar: 'الآن', en: 'Just now' },
+              reviewNote: { ar: trimmed, en: trimmed },
+            }
             : r,
         ),
       );
@@ -1944,17 +2216,17 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         prev.map((r) =>
           r.id === requestId
             ? {
-                ...r,
-                status: newStatus,
-                paymentStatus: newStatus === 'refunded' ? 'refunded_record' : r.paymentStatus,
-                updatedAt: { ar: 'الآن (تعديل إداري)', en: 'Just now (Admin Override)' },
-                // Preserve original paymentConfirmation untouched!
-                adminOverride: {
-                  reason: trimmed,
-                  timestamp: { ar: 'الآن', en: 'Just now' },
-                  previousStatus: target.status,
-                },
-              }
+              ...r,
+              status: newStatus,
+              paymentStatus: newStatus === 'refunded' ? 'refunded_record' : r.paymentStatus,
+              updatedAt: { ar: 'الآن (تعديل إداري)', en: 'Just now (Admin Override)' },
+              // Preserve original paymentConfirmation untouched!
+              adminOverride: {
+                reason: trimmed,
+                timestamp: { ar: 'الآن', en: 'Just now' },
+                previousStatus: target.status,
+              },
+            }
             : r,
         ),
       );
@@ -1993,13 +2265,17 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
       };
       setEnrollmentDisputes((prev) => [dispute, ...prev]);
       appendAudit(enrollmentId, 'dispute_submitted', target.studentId, 'student', 'dispute_open', target.status, description.trim());
+      const courseDbId = courseIdBySlugRef.current[target.courseSlug];
+      if (user && isUuid(enrollmentId) && courseDbId) {
+        void submitDisputeToDb(enrollmentId, user.id, courseDbId, category, description.trim());
+      }
       pushActivity(
         'enrollment',
         `بلاغ نزاع التحاق جديد حول دورة "${course?.title.ar ?? target.courseSlug}"`,
         `New enrollment dispute submitted for "${course?.title.en ?? target.courseSlug}"`,
       );
     },
-    [appendAudit, courses, enrollmentRequests, pushActivity],
+    [appendAudit, courses, enrollmentRequests, pushActivity, user],
   );
 
   const resolveEnrollmentDispute = useCallback(
@@ -2016,12 +2292,12 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         prev.map((d) =>
           d.id === disputeId
             ? {
-                ...d,
-                status: 'resolved',
-                resolutionNote: resolutionNote.trim(),
-                refundConfirmedByParties: Boolean(options?.refundConfirmedByParties),
-                resolvedAt: { ar: 'الآن', en: 'Just now' },
-              }
+              ...d,
+              status: 'resolved',
+              resolutionNote: resolutionNote.trim(),
+              refundConfirmedByParties: Boolean(options?.refundConfirmedByParties),
+              resolvedAt: { ar: 'الآن', en: 'Just now' },
+            }
             : d,
         ),
       );
@@ -2053,6 +2329,14 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
         `Admin recorded a resolution for your "${course?.title.en ?? dispute.courseSlug}" dispute: ${resolutionNote.trim()}`,
         '/student/enrollment-requests',
       );
+      if (user && isUuid(disputeId)) {
+        void rpcResolveDispute(
+          disputeId,
+          resolutionNote.trim(),
+          Boolean(options?.suspendAccess),
+          Boolean(options?.refundConfirmedByParties),
+        );
+      }
     },
     [
       adminOverrideEnrollmentStatus,
@@ -2225,52 +2509,86 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
   );
 
   // Reviews
-  const moderateReview = useCallback((reviewId: string, status: ReviewStatus, note?: string) => {
-    setReviews((prev) =>
-      prev.map((r) =>
-        r.id === reviewId
-          ? {
+  const moderateReview = useCallback(
+    (reviewId: string, status: ReviewStatus, note?: string) => {
+      setReviews((prev) =>
+        prev.map((r) =>
+          r.id === reviewId
+            ? {
               ...r,
               status,
               moderationNote: note?.trim() ? { ar: note.trim(), en: note.trim() } : r.moderationNote,
             }
-          : r,
-      ),
-    );
-  }, []);
+            : r,
+        ),
+      );
+      if (user && isUuid(reviewId)) {
+        void dbModerateCourseReview(reviewId, status, note);
+      }
+    },
+    [user],
+  );
 
-  const removeReview = useCallback((reviewId: string) => {
-    setReviews((prev) => prev.filter((r) => r.id !== reviewId));
-  }, []);
+  const removeReview = useCallback(
+    (reviewId: string) => {
+      setReviews((prev) => prev.filter((r) => r.id !== reviewId));
+      if (user && isUuid(reviewId)) {
+        void dbDeleteCourseReview(reviewId);
+      }
+    },
+    [user],
+  );
 
   // Community Moderation
-  const toggleHideCommunityPost = useCallback((postId: string) => {
-    setCommunityPosts((prev) =>
-      prev.map((p) => (p.id === postId ? { ...p, isHidden: !p.isHidden } : p)),
-    );
-    setModerationLog((prev) => [
-      {
-        id: `ml-${Date.now()}`,
-        action: { ar: 'تبديل إخفاء/إظهار منشور', en: 'Toggled post visibility' },
-        target: { ar: postId, en: postId },
-        timestamp: { ar: 'الآن', en: 'Just now' },
-      },
-      ...prev,
-    ]);
-  }, []);
+  const toggleHideCommunityPost = useCallback(
+    (postId: string) => {
+      const target = communityPosts.find((p) => p.id === postId);
+      const nextHidden = target ? !target.isHidden : true;
+      setCommunityPosts((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, isHidden: !p.isHidden } : p)),
+      );
+      setModerationLog((prev) => [
+        {
+          id: `ml-${Date.now()}`,
+          action: { ar: 'تبديل إخفاء/إظهار منشور', en: 'Toggled post visibility' },
+          target: { ar: postId, en: postId },
+          timestamp: { ar: 'الآن', en: 'Just now' },
+        },
+        ...prev,
+      ]);
+      if (user && isUuid(postId)) {
+        void dbModerateCommunityPost(
+          postId,
+          { is_hidden: nextHidden },
+          {
+            courseId: target ? courseIdBySlugRef.current[target.courseSlug] : undefined,
+            moderatorId: user.id,
+            actionType: nextHidden ? 'hide_post' : 'unhide_post',
+          },
+        );
+      }
+    },
+    [communityPosts, user],
+  );
 
-  const removeCommunityPost = useCallback((postId: string) => {
-    setCommunityPosts((prev) => prev.filter((p) => p.id !== postId));
-    setModerationLog((prev) => [
-      {
-        id: `ml-${Date.now()}`,
-        action: { ar: 'حذف منشور مجتمعي', en: 'Removed community post' },
-        target: { ar: postId, en: postId },
-        timestamp: { ar: 'الآن', en: 'Just now' },
-      },
-      ...prev,
-    ]);
-  }, []);
+  const removeCommunityPost = useCallback(
+    (postId: string) => {
+      setCommunityPosts((prev) => prev.filter((p) => p.id !== postId));
+      setModerationLog((prev) => [
+        {
+          id: `ml-${Date.now()}`,
+          action: { ar: 'حذف منشور مجتمعي', en: 'Removed community post' },
+          target: { ar: postId, en: postId },
+          timestamp: { ar: 'الآن', en: 'Just now' },
+        },
+        ...prev,
+      ]);
+      if (user && isUuid(postId)) {
+        void dbDeleteCommunityPost(postId);
+      }
+    },
+    [user],
+  );
 
   // Notifications & Settings
   const updateNotificationEvent = useCallback(
@@ -2282,12 +2600,29 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
     [],
   );
 
-  const updateSettings = useCallback((patch: Partial<PlatformSettingsState>) => {
-    setSettings((prev) => ({ ...prev, ...patch }));
-  }, []);
+  const updateSettings = useCallback(
+    (patch: Partial<PlatformSettingsState>) => {
+      setSettings((prev) => ({ ...prev, ...patch }));
+      if (user) {
+        const dbPatch: Record<string, unknown> = {};
+        if (patch.requireLessonApproval !== undefined) {
+          dbPatch.require_lesson_approval = patch.requireLessonApproval;
+        }
+        if (patch.requireReviewModeration !== undefined) {
+          dbPatch.require_review_moderation = patch.requireReviewModeration;
+        }
+        if (Object.keys(dbPatch).length > 0) {
+          void dbUpdatePlatformSettings(dbPatch);
+        }
+      }
+    },
+    [user],
+  );
 
   const value = useMemo<PlatformDemoContextValue>(
     () => ({
+      getCourseDbId,
+      getDisciplineDbId,
       isAdminDemoActive,
       enterAdminDemo,
       exitAdminDemo,
@@ -2368,6 +2703,8 @@ export function PlatformDemoProvider({ children }: { children: ReactNode }) {
       activityTimeline,
     }),
     [
+      getCourseDbId,
+      getDisciplineDbId,
       isAdminDemoActive,
       enterAdminDemo,
       exitAdminDemo,

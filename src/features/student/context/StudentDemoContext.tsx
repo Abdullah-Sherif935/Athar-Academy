@@ -6,7 +6,17 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { useAuth } from '../../../app/providers/AuthProvider';
 import { usePlatformDemo } from '../../../app/providers/PlatformDemoContext';
+import {
+  dbCreateCommunityComment,
+  dbCreateCommunityPost,
+  dbMarkConversationRead,
+  dbSendMessage,
+  dbUpsertNotificationPreferences,
+  isUuid,
+  rpcUpsertLessonProgress,
+} from '../../../services/lmsService';
 import type { DisputeCategory, EnrollmentDispute } from '../../../data/mock/admin';
 import {
   INITIAL_CERTIFICATES,
@@ -79,6 +89,7 @@ export interface StudentDemoContextValue {
 const StudentDemoContext = createContext<StudentDemoContextValue | null>(null);
 
 export function StudentDemoProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const platform = usePlatformDemo();
 
   const [isDemoActive, setIsDemoActive] = useState<boolean>(readInitialDemoActive);
@@ -212,20 +223,42 @@ export function StudentDemoProvider({ children }: { children: ReactNode }) {
           };
         }),
       );
+      const courseDbId = platform.getCourseDbId(courseSlug);
+      if (user && courseDbId && isUuid(lessonId)) {
+        const rec = platform.studentEnrolledCourses.find((e) => e.courseSlug === courseSlug);
+        const willBeCompleted = !rec?.completedLessonIds.includes(lessonId);
+        void rpcUpsertLessonProgress({
+          courseId: courseDbId,
+          lessonId,
+          isCompleted: willBeCompleted,
+        });
+      }
     },
-    [getFlatPublishedLessonIds, platform],
+    [getFlatPublishedLessonIds, platform, user],
   );
 
-  const saveLessonNote = useCallback((courseSlug: string, lessonId: string, note: string) => {
-    setLessonNotes((prev) => ({ ...prev, [`${courseSlug}:${lessonId}`]: note }));
-  }, []);
+  const saveLessonNote = useCallback(
+    (courseSlug: string, lessonId: string, note: string) => {
+      setLessonNotes((prev) => ({ ...prev, [`${courseSlug}:${lessonId}`]: note }));
+      const courseDbId = platform.getCourseDbId(courseSlug);
+      if (user && courseDbId && isUuid(lessonId)) {
+        void rpcUpsertLessonProgress({
+          courseId: courseDbId,
+          lessonId,
+          notes: note,
+        });
+      }
+    },
+    [platform, user],
+  );
 
   const addPost = useCallback(
     (courseSlug: string, content: string) => {
       const trimmed = content.trim();
       if (!trimmed) return;
+      const tempId = `post-demo-${Date.now()}`;
       const newPost: CommunityPostItem = {
-        id: `post-demo-${Date.now()}`,
+        id: tempId,
         courseSlug,
         authorName: profile.fullName,
         authorRole: 'student',
@@ -237,14 +270,26 @@ export function StudentDemoProvider({ children }: { children: ReactNode }) {
         replies: [],
       };
       setPosts((prev) => [newPost, ...prev]);
+      const courseDbId = platform.getCourseDbId(courseSlug);
+      if (user && courseDbId) {
+        void dbCreateCommunityPost({
+          courseId: courseDbId,
+          authorId: user.id,
+          content: trimmed,
+        }).then(({ data }) => {
+          if (!data?.id) return;
+          setPosts((prev) => prev.map((p) => (p.id === tempId ? { ...p, id: data.id } : p)));
+        });
+      }
     },
-    [profile],
+    [platform, profile, user],
   );
 
   const addReply = useCallback(
     (postId: string, content: string) => {
       const trimmed = content.trim();
       if (!trimmed) return;
+      const targetPost = posts.find((p) => p.id === postId);
       setPosts((prev) =>
         prev.map((post) =>
           post.id === postId
@@ -265,8 +310,17 @@ export function StudentDemoProvider({ children }: { children: ReactNode }) {
             : post,
         ),
       );
+      const courseDbId = targetPost ? platform.getCourseDbId(targetPost.courseSlug) : undefined;
+      if (user && isUuid(postId) && courseDbId) {
+        void dbCreateCommunityComment({
+          postId,
+          courseId: courseDbId,
+          authorId: user.id,
+          content: trimmed,
+        });
+      }
     },
-    [profile],
+    [platform, posts, profile, user],
   );
 
   const toggleLikePost = useCallback((postId: string) => {
@@ -283,41 +337,66 @@ export function StudentDemoProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  const sendMessage = useCallback((conversationId: string, text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-    setConversations((prev) =>
-      prev.map((conv) =>
-        conv.id === conversationId
-          ? {
-              ...conv,
-              unreadCount: 0,
-              messages: [
-                ...conv.messages,
-                {
-                  id: `msg-demo-${Date.now()}`,
-                  sender: 'student',
-                  content: { ar: trimmed, en: trimmed },
-                  timeLabel: { ar: 'الآن (تجريبي)', en: 'Just now (Demo)' },
-                },
-              ],
-            }
-          : conv,
-      ),
-    );
-  }, []);
+  const sendMessage = useCallback(
+    (conversationId: string, text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      setConversations((prev) =>
+        prev.map((conv) =>
+          conv.id === conversationId
+            ? {
+                ...conv,
+                unreadCount: 0,
+                messages: [
+                  ...conv.messages,
+                  {
+                    id: `msg-demo-${Date.now()}`,
+                    sender: 'student',
+                    content: { ar: trimmed, en: trimmed },
+                    timeLabel: { ar: 'الآن (تجريبي)', en: 'Just now (Demo)' },
+                  },
+                ],
+              }
+            : conv,
+        ),
+      );
+      if (user && isUuid(conversationId)) {
+        void dbSendMessage(conversationId, user.id, trimmed);
+      }
+    },
+    [user],
+  );
 
-  const markConversationRead = useCallback((conversationId: string) => {
-    setConversations((prev) =>
-      prev.map((conv) => (conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv)),
-    );
-  }, []);
+  const markConversationRead = useCallback(
+    (conversationId: string) => {
+      setConversations((prev) =>
+        prev.map((conv) => (conv.id === conversationId ? { ...conv, unreadCount: 0 } : conv)),
+      );
+      if (user && isUuid(conversationId)) {
+        void dbMarkConversationRead(conversationId, user.id);
+      }
+    },
+    [user],
+  );
 
   const updateNotificationPref = useCallback(
     (key: keyof StudentNotificationPreferences, value: boolean) => {
       setNotificationPrefs((prev) => ({ ...prev, [key]: value }));
+      if (user) {
+        const keyMap: Record<keyof StudentNotificationPreferences, string> = {
+          newLessons: 'new_lessons',
+          instructorAnnouncements: 'instructor_announcements',
+          communityReplies: 'community_replies',
+          directMessages: 'direct_messages',
+          weeklySummary: 'weekly_summary',
+        };
+        const dbCol = keyMap[key];
+        if (dbCol) {
+          void dbUpsertNotificationPreferences(user.id, { [dbCol]: value });
+        }
+      }
     },
-    [],
+    [user],
   );
 
   const value = useMemo<StudentDemoContextValue>(
