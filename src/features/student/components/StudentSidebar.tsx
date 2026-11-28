@@ -14,7 +14,8 @@ import {
   User,
   X,
 } from 'lucide-react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../../app/providers/AuthProvider';
 import { useI18n } from '../../../app/providers/I18nProvider';
 import { BrandLogo } from '../../../components/brand/BrandLogo';
 import { ThemeSwitcher } from '../../../components/brand/ThemeSwitcher';
@@ -26,7 +27,9 @@ interface StudentSidebarProps {
 }
 
 export function StudentSidebar({ onNavigate, showClose = false }: StudentSidebarProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
   const { notifications, conversations, enrollmentRequests, exitDemoMode } = useStudentDemo();
 
   const unreadNotifs = notifications.filter((n) => !n.isRead).length;
@@ -72,9 +75,9 @@ export function StudentSidebar({ onNavigate, showClose = false }: StudentSidebar
 
   return (
     <>
-      <div className="student-sidebar__brand">
+      <div className={`student-sidebar__brand ${showClose ? 'student-sidebar__brand--with-close' : ''}`.trim()}>
         <Link to="/student" onClick={onNavigate} aria-label={t('student.portalName')}>
-          <BrandLogo variant="horizontal" size="sm" />
+          <BrandLogo variant="horizontal" size="md" />
         </Link>
         {showClose ? (
           <button
@@ -123,13 +126,21 @@ export function StudentSidebar({ onNavigate, showClose = false }: StudentSidebar
           type="button"
           className="student-nav-link"
           style={{ border: 'none', background: 'transparent', cursor: 'pointer', width: '100%' }}
-          onClick={() => {
-            exitDemoMode();
-            onNavigate?.();
+          onClick={async () => {
+            if (user) {
+              await signOut();
+              onNavigate?.();
+              navigate('/login');
+            } else {
+              exitDemoMode();
+              onNavigate?.();
+            }
           }}
         >
           <LogOut size={17} aria-hidden="true" />
-          <span>{t('student.demoBanner.exit')}</span>
+          <span>
+            {user ? (locale === 'ar' ? 'تسجيل الخروج' : 'Sign Out') : t('student.demoBanner.exit')}
+          </span>
         </button>
       </div>
     </>

@@ -15,7 +15,8 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../../app/providers/AuthProvider';
 import { useI18n } from '../../../app/providers/I18nProvider';
 import { usePlatformDemo } from '../../../app/providers/PlatformDemoContext';
 import { BrandLogo } from '../../../components/brand/BrandLogo';
@@ -28,7 +29,9 @@ export function AdminSidebar({
   onNavigate?: () => void;
   showClose?: boolean;
 }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
   const { enrollmentRequests, courses, courseProposals, reviews, communityPosts, exitAdminDemo } =
     usePlatformDemo();
 
@@ -95,9 +98,9 @@ export function AdminSidebar({
 
   return (
     <>
-      <div className="student-sidebar__brand">
+      <div className={`student-sidebar__brand ${showClose ? 'student-sidebar__brand--with-close' : ''}`.trim()}>
         <Link to="/admin" onClick={onNavigate} aria-label={t('admin.portalName')}>
-          <BrandLogo variant="horizontal" size="sm" />
+          <BrandLogo variant="horizontal" size="md" />
         </Link>
         {showClose ? (
           <button
@@ -144,13 +147,21 @@ export function AdminSidebar({
           type="button"
           className="student-nav-link"
           style={{ border: 'none', background: 'transparent', cursor: 'pointer', width: '100%' }}
-          onClick={() => {
-            exitAdminDemo();
-            onNavigate?.();
+          onClick={async () => {
+            if (user) {
+              await signOut();
+              onNavigate?.();
+              navigate('/login');
+            } else {
+              exitAdminDemo();
+              onNavigate?.();
+            }
           }}
         >
           <LogOut size={17} aria-hidden="true" />
-          <span>{t('admin.demoBanner.exit')}</span>
+          <span>
+            {user ? (locale === 'ar' ? 'تسجيل الخروج' : 'Sign Out') : t('admin.demoBanner.exit')}
+          </span>
         </button>
       </div>
     </>

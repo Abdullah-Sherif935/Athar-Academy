@@ -41,12 +41,38 @@
 }
 
 .student-sidebar__brand {
-  padding: 18px 20px;
+  height: 76px;
+  min-height: 76px;
+  flex-shrink: 0;
+  padding-block: 0;
+  padding-inline: 18px;
   border-block-end: 1px solid var(--border);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 10px;
+}
+
+.student-sidebar__brand--with-close {
+  justify-content: space-between;
+}
+
+.student-sidebar__brand > a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  max-width: 100%;
+}
+
+.student-sidebar__brand .brand-logo--horizontal {
+  height: 50px;
+  max-width: 100%;
+}
+
+.student-sidebar__brand .brand-logo--on-dark {
+  padding-block: 5px;
+  padding-inline: 12px;
 }
 
 .student-sidebar__nav {
@@ -117,7 +143,9 @@
   position: sticky;
   inset-block-start: 0;
   z-index: 60;
-  min-height: 64px;
+  height: 76px;
+  min-height: 76px;
+  flex-shrink: 0;
   background-color: var(--surface);
   border-block-end: 1px solid var(--border);
   padding-inline: 16px;

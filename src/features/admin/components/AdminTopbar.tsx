@@ -1,5 +1,6 @@
 import { Bell, Menu, Shield } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../../app/providers/AuthProvider';
 import { useI18n } from '../../../app/providers/I18nProvider';
 import { usePlatformDemo } from '../../../app/providers/PlatformDemoContext';
 import { LanguageSwitcher } from '../../../components/brand/LanguageSwitcher';
@@ -7,8 +8,18 @@ import { ThemeSwitcher } from '../../../components/brand/ThemeSwitcher';
 import { Badge } from '../../../components/ui';
 
 export function AdminTopbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const { user, profile } = useAuth();
   const { enrollmentRequests, courses } = usePlatformDemo();
+
+  const displayName = user
+    ? (locale === 'ar' ? profile?.full_name_ar : profile?.full_name_en) ||
+      profile?.full_name_en ||
+      profile?.full_name_ar ||
+      user.email ||
+      t('admin.portalName')
+    : t('admin.guard.demoUserName');
+  const displayInitials = user ? profile?.initials || 'SA' : 'SA';
 
   const pendingTotal =
     enrollmentRequests.filter((r) => r.status === 'pending').length +
@@ -74,9 +85,9 @@ export function AdminTopbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }
         </Link>
         <Link to="/admin/settings" className="student-avatar-pill">
           <span className="student-avatar-pill__circle" aria-hidden="true">
-            SA
+            {displayInitials}
           </span>
-          <span className="student-avatar-pill__name">{t('admin.guard.demoUserName')}</span>
+          <span className="student-avatar-pill__name">{displayName}</span>
         </Link>
       </div>
     </header>

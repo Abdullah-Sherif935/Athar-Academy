@@ -1,5 +1,6 @@
 import { Bell, Menu } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../../../app/providers/AuthProvider';
 import { useI18n } from '../../../app/providers/I18nProvider';
 import { LanguageSwitcher } from '../../../components/brand/LanguageSwitcher';
 import { ThemeSwitcher } from '../../../components/brand/ThemeSwitcher';
@@ -8,8 +9,18 @@ import { useStudentDemo } from '../context/StudentDemoContext';
 
 export function StudentTopbar({ onOpenMobileNav }: { onOpenMobileNav: () => void }) {
   const { t, locale } = useI18n();
+  const { user, profile: authProfile } = useAuth();
   const { profile, notifications } = useStudentDemo();
   const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  const displayName = user
+    ? (locale === 'ar' ? authProfile?.full_name_ar : authProfile?.full_name_en) ||
+      authProfile?.full_name_en ||
+      authProfile?.full_name_ar ||
+      user.email ||
+      profile.fullName[locale]
+    : profile.fullName[locale];
+  const displayInitials = user ? authProfile?.initials || profile.initials : profile.initials;
 
   return (
     <header className="student-topbar">
@@ -60,9 +71,9 @@ export function StudentTopbar({ onOpenMobileNav }: { onOpenMobileNav: () => void
         </Link>
         <Link to="/student/profile" className="student-avatar-pill">
           <span className="student-avatar-pill__circle" aria-hidden="true">
-            {profile.initials}
+            {displayInitials}
           </span>
-          <span className="student-avatar-pill__name">{profile.fullName[locale]}</span>
+          <span className="student-avatar-pill__name">{displayName}</span>
         </Link>
       </div>
     </header>
